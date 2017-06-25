@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -16,32 +16,33 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import itertools
-import uuid
-
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import signals, Q
+from django.db.models import Q
 from django.apps import apps
-from django.conf import settings
-from django.dispatch import receiver
-from django.contrib.auth import get_user_model
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
 from django.utils.functional import cached_property
 
-from django_pgjson.fields import JsonField
-from djorm_pgarray.fields import TextArrayField
+from django_pglocks import advisory_lock
 
-from taiga.base.tags import TaggedMixin
-from taiga.base.utils.dicts import dict_sum
+from taiga.base.db.models.fields import JSONField
+
+from taiga.base.utils.time import timestamp_ms
+from taiga.projects.custom_attributes.models import EpicCustomAttribute
+from taiga.projects.custom_attributes.models import UserStoryCustomAttribute
+from taiga.projects.custom_attributes.models import TaskCustomAttribute
+from taiga.projects.custom_attributes.models import IssueCustomAttribute
+from taiga.projects.tagging.models import TaggedMixin
+from taiga.projects.tagging.models import TagsColorsMixin
 from taiga.base.utils.files import get_file_path
-from taiga.base.utils.sequence import arithmetic_progression
 from taiga.base.utils.slug import slugify_uniquely
 from taiga.base.utils.slug import slugify_uniquely_for_queryset
 
-from taiga.permissions.permissions import ANON_PERMISSIONS, MEMBERS_PERMISSIONS
+from taiga.permissions.choices import ANON_PERMISSIONS, MEMBERS_PERMISSIONS
 
 from taiga.projects.notifications.choices import NotifyLevel
 from taiga.projects.notifications.services import (
@@ -85,10 +86,16 @@ class Membership(models.Model):
                                    null=True, blank=True)
 
     invitation_extra_text = models.TextField(null=True, blank=True,
-                                   verbose_name=_("invitation extra text"))
+                                             verbose_name=_("invitation extra text"))
 
-    user_order = models.IntegerField(default=10000, null=False, blank=False,
-                            verbose_name=_("user order"))
+    user_order = models.BigIntegerField(default=timestamp_ms, null=False, blank=False,
+                                        verbose_name=_("user order"))
+
+    class Meta:
+        verbose_name = "membership"
+        verbose_name_plural = "memberships"
+        unique_together = ("user", "project",)
+        ordering = ["project", "user__full_name", "user__username", "user__email", "email"]
 
     def get_related_people(self):
         related_people = get_user_model().objects.filter(id=self.user.id)
@@ -100,24 +107,19 @@ class Membership(models.Model):
         if self.user and memberships.count() > 0 and memberships[0].id != self.id:
             raise ValidationError(_('The user is already member of the project'))
 
-    class Meta:
-        verbose_name = "membership"
-        verbose_name_plural = "membershipss"
-        unique_together = ("user", "project",)
-        ordering = ["project", "user__full_name", "user__username", "user__email", "email"]
-        permissions = (
-            ("view_membership", "Can view membership"),
-        )
-
 
 class ProjectDefaults(models.Model):
-    default_points = models.OneToOneField("projects.Points", on_delete=models.SET_NULL,
-                                          related_name="+", null=True, blank=True,
-                                          verbose_name=_("default points"))
+    default_epic_status = models.OneToOneField("projects.EpicStatus",
+                                               on_delete=models.SET_NULL, related_name="+",
+                                               null=True, blank=True,
+                                               verbose_name=_("default epic status"))
     default_us_status = models.OneToOneField("projects.UserStoryStatus",
                                              on_delete=models.SET_NULL, related_name="+",
                                              null=True, blank=True,
                                              verbose_name=_("default US status"))
+    default_points = models.OneToOneField("projects.Points", on_delete=models.SET_NULL,
+                                          related_name="+", null=True, blank=True,
+                                          verbose_name=_("default points"))
     default_task_status = models.OneToOneField("projects.TaskStatus",
                                                on_delete=models.SET_NULL, related_name="+",
                                                null=True, blank=True,
@@ -141,7 +143,7 @@ class ProjectDefaults(models.Model):
         abstract = True
 
 
-class Project(ProjectDefaults, TaggedMixin, models.Model):
+class Project(ProjectDefaults, TaggedMixin, TagsColorsMixin, models.Model):
     name = models.CharField(max_length=250, null=False, blank=False,
                             verbose_name=_("name"))
     slug = models.SlugField(max_length=250, unique=True, null=False, blank=True,
@@ -150,8 +152,8 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
                                    verbose_name=_("description"))
 
     logo = models.FileField(upload_to=get_project_logo_file_path,
-                             max_length=500, null=True, blank=True,
-                             verbose_name=_("logo"))
+                            max_length=500, null=True, blank=True,
+                            verbose_name=_("logo"))
 
     created_date = models.DateTimeField(null=False, blank=False,
                                         verbose_name=_("created date"),
@@ -166,7 +168,10 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
     total_milestones = models.IntegerField(null=True, blank=True,
                                            verbose_name=_("total of milestones"))
     total_story_points = models.FloatField(null=True, blank=True, verbose_name=_("total story points"))
-
+    is_contact_activated = models.BooleanField(default=True, null=False, blank=True,
+                                               verbose_name=_("active contact"))
+    is_epics_activated = models.BooleanField(default=False, null=False, blank=True,
+                                             verbose_name=_("active epics panel"))
     is_backlog_activated = models.BooleanField(default=True, null=False, blank=True,
                                                verbose_name=_("active backlog panel"))
     is_kanban_activated = models.BooleanField(default=False, null=False, blank=True,
@@ -179,32 +184,31 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
                                         choices=choices.VIDEOCONFERENCES_CHOICES,
                                         verbose_name=_("videoconference system"))
     videoconferences_extra_data = models.CharField(max_length=250, null=True, blank=True,
-                                             verbose_name=_("videoconference extra data"))
+                                                   verbose_name=_("videoconference extra data"))
 
     creation_template = models.ForeignKey("projects.ProjectTemplate",
                                           related_name="projects", null=True,
+                                          on_delete=models.SET_NULL,
                                           blank=True, default=None,
                                           verbose_name=_("creation template"))
 
-    anon_permissions = TextArrayField(blank=True, null=True,
-                                      default=[],
-                                      verbose_name=_("anonymous permissions"),
-                                      choices=ANON_PERMISSIONS)
-    public_permissions = TextArrayField(blank=True, null=True,
-                                        default=[],
-                                        verbose_name=_("user permissions"),
-                                        choices=MEMBERS_PERMISSIONS)
     is_private = models.BooleanField(default=True, null=False, blank=True,
                                      verbose_name=_("is private"))
+    anon_permissions = ArrayField(models.TextField(null=False, blank=False, choices=ANON_PERMISSIONS),
+                                  null=True, blank=True, default=[], verbose_name=_("anonymous permissions"))
+    public_permissions = ArrayField(models.TextField(null=False, blank=False, choices=MEMBERS_PERMISSIONS),
+                                    null=True, blank=True, default=[], verbose_name=_("user permissions"))
 
     is_featured = models.BooleanField(default=False, null=False, blank=True,
-                                     verbose_name=_("is featured"))
+                                      verbose_name=_("is featured"))
 
     is_looking_for_people = models.BooleanField(default=False, null=False, blank=True,
-                                     verbose_name=_("is looking for people"))
+                                                verbose_name=_("is looking for people"))
     looking_for_people_note = models.TextField(default="", null=False, blank=True,
-                                               verbose_name=_("loking for people note"))
+                                               verbose_name=_("looking for people note"))
 
+    epics_csv_uuid = models.CharField(max_length=32, editable=False, null=True,
+                                      blank=True, default=None, db_index=True)
     userstories_csv_uuid = models.CharField(max_length=32, editable=False,
                                             null=True, blank=True,
                                             default=None, db_index=True)
@@ -214,43 +218,43 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
                                        null=True, blank=True, default=None,
                                        db_index=True)
 
-    tags_colors = TextArrayField(dimension=2, default=[], null=False, blank=True,
-                                 verbose_name=_("tags colors"))
-
     transfer_token = models.CharField(max_length=255, null=True, blank=True, default=None,
                                       verbose_name=_("project transfer token"))
 
     blocked_code = models.CharField(null=True, blank=True, max_length=255,
-                            choices=choices.BLOCKING_CODES + settings.EXTRA_BLOCKING_CODES, default=None,
-                            verbose_name=_("blocked code"))
-
-    #Totals:
+                                    choices=choices.BLOCKING_CODES + settings.EXTRA_BLOCKING_CODES,
+                                    default=None, verbose_name=_("blocked code"))
+    # Totals:
     totals_updated_datetime = models.DateTimeField(null=False, blank=False, auto_now_add=True,
-                                            verbose_name=_("updated date time"), db_index=True)
+                                                   verbose_name=_("updated date time"), db_index=True)
 
     total_fans = models.PositiveIntegerField(null=False, blank=False, default=0,
                                              verbose_name=_("count"), db_index=True)
 
     total_fans_last_week = models.PositiveIntegerField(null=False, blank=False, default=0,
-                                             verbose_name=_("fans last week"), db_index=True)
+                                                       verbose_name=_("fans last week"), db_index=True)
 
     total_fans_last_month = models.PositiveIntegerField(null=False, blank=False, default=0,
-                                              verbose_name=_("fans last month"), db_index=True)
+                                                        verbose_name=_("fans last month"), db_index=True)
 
     total_fans_last_year = models.PositiveIntegerField(null=False, blank=False, default=0,
-                                             verbose_name=_("fans last year"), db_index=True)
+                                                       verbose_name=_("fans last year"), db_index=True)
 
     total_activity = models.PositiveIntegerField(null=False, blank=False, default=0,
-                                                 verbose_name=_("count"), db_index=True)
+                                                 verbose_name=_("count"),
+                                                 db_index=True)
 
     total_activity_last_week = models.PositiveIntegerField(null=False, blank=False, default=0,
-                                             verbose_name=_("activity last week"), db_index=True)
+                                                           verbose_name=_("activity last week"),
+                                                           db_index=True)
 
     total_activity_last_month = models.PositiveIntegerField(null=False, blank=False, default=0,
-                                              verbose_name=_("activity last month"), db_index=True)
+                                                            verbose_name=_("activity last month"),
+                                                            db_index=True)
 
     total_activity_last_year = models.PositiveIntegerField(null=False, blank=False, default=0,
-                                             verbose_name=_("activity last year"), db_index=True)
+                                                           verbose_name=_("activity last year"),
+                                                           db_index=True)
 
     _importing = None
 
@@ -262,10 +266,6 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
             ["name", "id"],
         ]
 
-        permissions = (
-            ("view_project", "Can view project"),
-        )
-
     def __str__(self):
         return self.name
 
@@ -275,16 +275,6 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
     def save(self, *args, **kwargs):
         if not self._importing or not self.modified_date:
             self.modified_date = timezone.now()
-
-        if not self.slug:
-            base_name = "{}-{}".format(self.owner.username, self.name)
-            base_slug = slugify_uniquely(base_name, self.__class__)
-            slug = base_slug
-            for i in arithmetic_progression():
-                if not type(self).objects.filter(slug=slug).exists() or i > 100:
-                    break
-                slug = "{}-{}".format(base_slug, i)
-            self.slug = slug
 
         if not self.is_backlog_activated:
             self.total_milestones = None
@@ -296,13 +286,19 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
         if not self.is_looking_for_people:
             self.looking_for_people_note = ""
 
-        if self.anon_permissions == None:
+        if self.anon_permissions is None:
             self.anon_permissions = []
 
-        if self.public_permissions == None:
+        if self.public_permissions is None:
             self.public_permissions = []
 
-        super().save(*args, **kwargs)
+        if not self.slug:
+            with advisory_lock("project-creation"):
+                base_slug = "{}-{}".format(self.owner.username, self.name)
+                self.slug = slugify_uniquely(base_slug, self.__class__)
+                super().save(*args, **kwargs)
+        else:
+            super().save(*args, **kwargs)
 
     def refresh_totals(self, save=True):
         now = timezone.now()
@@ -314,13 +310,13 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
 
         self.total_fans = qs.count()
 
-        qs_week = qs.filter(created_date__gte=now-relativedelta(weeks=1))
+        qs_week = qs.filter(created_date__gte=now - relativedelta(weeks=1))
         self.total_fans_last_week = qs_week.count()
 
-        qs_month = qs.filter(created_date__gte=now-relativedelta(months=1))
+        qs_month = qs.filter(created_date__gte=now - relativedelta(months=1))
         self.total_fans_last_month = qs_month.count()
 
-        qs_year = qs.filter(created_date__gte=now-relativedelta(years=1))
+        qs_year = qs.filter(created_date__gte=now - relativedelta(years=1))
         self.total_fans_last_year = qs_year.count()
 
         tl_model = apps.get_model("timeline", "Timeline")
@@ -329,13 +325,13 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
         qs = tl_model.objects.filter(namespace=namespace)
         self.total_activity = qs.count()
 
-        qs_week = qs.filter(created__gte=now-relativedelta(weeks=1))
+        qs_week = qs.filter(created__gte=now - relativedelta(weeks=1))
         self.total_activity_last_week = qs_week.count()
 
-        qs_month = qs.filter(created__gte=now-relativedelta(months=1))
+        qs_month = qs.filter(created__gte=now - relativedelta(months=1))
         self.total_activity_last_month = qs_month.count()
 
-        qs_year = qs.filter(created__gte=now-relativedelta(years=1))
+        qs_year = qs.filter(created__gte=now - relativedelta(years=1))
         self.total_activity_last_year = qs_year.count()
 
         if save:
@@ -369,7 +365,7 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
             policy = model_cls.objects.create(
                 project=self,
                 user=user,
-                notify_level= NotifyLevel.involved)
+                notify_level=NotifyLevel.involved)
 
             del self.cached_notify_policies
 
@@ -377,7 +373,8 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
 
     @cached_property
     def cached_memberships(self):
-        return {m.user.id: m for m in self.memberships.exclude(user__isnull=True).select_related("user", "project", "role")}
+        return {m.user.id: m for m in self.memberships.exclude(user__isnull=True)
+                                                      .select_related("user", "project", "role")}
 
     def cached_memberships_for_user(self, user):
         return self.cached_memberships.get(user.id, None)
@@ -385,9 +382,12 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
     def get_roles(self):
         return self.roles.all()
 
-    def get_users(self):
+    def get_users(self, with_admin_privileges=None):
         user_model = get_user_model()
-        members = self.memberships.values_list("user", flat=True)
+        members = self.memberships.all()
+        if with_admin_privileges is not None:
+            members = members.filter(Q(is_admin=True)|Q(user__id=self.owner.id))
+        members = members.values_list("user", flat=True)
         return user_model.objects.filter(id__in=list(members))
 
     def update_role_points(self, user_stories=None):
@@ -470,6 +470,8 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
         # NOTE: Remember to update code in taiga.projects.admin.ProjectAdmin.delete_selected
         from taiga.events.apps import (connect_events_signals,
                                        disconnect_events_signals)
+        from taiga.projects.epics.apps import (connect_all_epics_signals,
+                                             disconnect_all_epics_signals)
         from taiga.projects.tasks.apps import (connect_all_tasks_signals,
                                                disconnect_all_tasks_signals)
         from taiga.projects.userstories.apps import (connect_all_userstories_signals,
@@ -480,12 +482,14 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
                                          disconnect_memberships_signals)
 
         disconnect_events_signals()
+        disconnect_all_epics_signals()
         disconnect_all_issues_signals()
         disconnect_all_tasks_signals()
         disconnect_all_userstories_signals()
         disconnect_memberships_signals()
 
         try:
+            self.epics.all().delete()
             self.tasks.all().delete()
             self.user_stories.all().delete()
             self.issues.all().delete()
@@ -496,18 +500,52 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
             connect_all_issues_signals()
             connect_all_tasks_signals()
             connect_all_userstories_signals()
+            connect_all_epics_signals()
             connect_memberships_signals()
 
 
 class ProjectModulesConfig(models.Model):
     project = models.OneToOneField("Project", null=False, blank=False,
-                                related_name="modules_config", verbose_name=_("project"))
-    config = JsonField(null=True, blank=True, verbose_name=_("modules config"))
+                                   related_name="modules_config", verbose_name=_("project"))
+    config = JSONField(null=True, blank=True, verbose_name=_("modules config"))
 
     class Meta:
         verbose_name = "project modules config"
         verbose_name_plural = "project modules configs"
         ordering = ["project"]
+
+
+# Epic common Models
+class EpicStatus(models.Model):
+    name = models.CharField(max_length=255, null=False, blank=False,
+                            verbose_name=_("name"))
+    slug = models.SlugField(max_length=255, null=False, blank=True,
+                            verbose_name=_("slug"))
+    order = models.IntegerField(default=10, null=False, blank=False,
+                                verbose_name=_("order"))
+    is_closed = models.BooleanField(default=False, null=False, blank=True,
+                                    verbose_name=_("is closed"))
+    color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
+                             verbose_name=_("color"))
+    project = models.ForeignKey("Project", null=False, blank=False,
+                                related_name="epic_statuses", verbose_name=_("project"))
+
+    class Meta:
+        verbose_name = "epic status"
+        verbose_name_plural = "epic statuses"
+        ordering = ["project", "order", "name"]
+        unique_together = (("project", "name"), ("project", "slug"))
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        qs = self.project.epic_statuses
+        if self.id:
+            qs = qs.exclude(id=self.id)
+
+        self.slug = slugify_uniquely_for_queryset(self.name, qs)
+        return super().save(*args, **kwargs)
 
 
 # User Stories common Models
@@ -521,7 +559,7 @@ class UserStoryStatus(models.Model):
     is_closed = models.BooleanField(default=False, null=False, blank=True,
                                     verbose_name=_("is closed"))
     is_archived = models.BooleanField(default=False, null=False, blank=True,
-                                verbose_name=_("is archived"))
+                                      verbose_name=_("is archived"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
     wip_limit = models.IntegerField(null=True, blank=True, default=None,
@@ -534,9 +572,6 @@ class UserStoryStatus(models.Model):
         verbose_name_plural = "user story statuses"
         ordering = ["project", "order", "name"]
         unique_together = (("project", "name"), ("project", "slug"))
-        permissions = (
-            ("view_userstorystatus", "Can view user story status"),
-        )
 
     def __str__(self):
         return self.name
@@ -565,9 +600,6 @@ class Points(models.Model):
         verbose_name_plural = "points"
         ordering = ["project", "order", "name"]
         unique_together = ("project", "name")
-        permissions = (
-            ("view_points", "Can view points"),
-        )
 
     def __str__(self):
         return self.name
@@ -594,9 +626,6 @@ class TaskStatus(models.Model):
         verbose_name_plural = "task statuses"
         ordering = ["project", "order", "name"]
         unique_together = (("project", "name"), ("project", "slug"))
-        permissions = (
-            ("view_taskstatus", "Can view task status"),
-        )
 
     def __str__(self):
         return self.name
@@ -627,9 +656,6 @@ class Priority(models.Model):
         verbose_name_plural = "priorities"
         ordering = ["project", "order", "name"]
         unique_together = ("project", "name")
-        permissions = (
-            ("view_priority", "Can view priority"),
-        )
 
     def __str__(self):
         return self.name
@@ -650,9 +676,6 @@ class Severity(models.Model):
         verbose_name_plural = "severities"
         ordering = ["project", "order", "name"]
         unique_together = ("project", "name")
-        permissions = (
-            ("view_severity", "Can view severity"),
-        )
 
     def __str__(self):
         return self.name
@@ -677,9 +700,6 @@ class IssueStatus(models.Model):
         verbose_name_plural = "issue statuses"
         ordering = ["project", "order", "name"]
         unique_together = (("project", "name"), ("project", "slug"))
-        permissions = (
-            ("view_issuestatus", "Can view issue status"),
-        )
 
     def __str__(self):
         return self.name
@@ -708,21 +728,20 @@ class IssueType(models.Model):
         verbose_name_plural = "issue types"
         ordering = ["project", "order", "name"]
         unique_together = ("project", "name")
-        permissions = (
-            ("view_issuetype", "Can view issue type"),
-        )
 
     def __str__(self):
         return self.name
 
 
-class ProjectTemplate(models.Model):
+class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
     name = models.CharField(max_length=250, null=False, blank=False,
                             verbose_name=_("name"))
     slug = models.SlugField(max_length=250, null=False, blank=True,
                             verbose_name=_("slug"), unique=True)
     description = models.TextField(null=False, blank=False,
                                    verbose_name=_("description"))
+    order = models.BigIntegerField(default=timestamp_ms, null=False, blank=False,
+                                   verbose_name=_("user order"))
     created_date = models.DateTimeField(null=False, blank=False,
                                         verbose_name=_("created date"),
                                         default=timezone.now)
@@ -731,7 +750,10 @@ class ProjectTemplate(models.Model):
     default_owner_role = models.CharField(max_length=50, null=False,
                                           blank=False,
                                           verbose_name=_("default owner's role"))
-
+    is_contact_activated = models.BooleanField(default=True, null=False, blank=True,
+                                               verbose_name=_("active contact"))
+    is_epics_activated = models.BooleanField(default=False, null=False, blank=True,
+                                             verbose_name=_("active epics panel"))
     is_backlog_activated = models.BooleanField(default=True, null=False, blank=True,
                                                verbose_name=_("active backlog panel"))
     is_kanban_activated = models.BooleanField(default=False, null=False, blank=True,
@@ -740,27 +762,37 @@ class ProjectTemplate(models.Model):
                                             verbose_name=_("active wiki panel"))
     is_issues_activated = models.BooleanField(default=True, null=False, blank=True,
                                               verbose_name=_("active issues panel"))
+    is_looking_for_people = models.BooleanField(default=False, null=False, blank=True,
+                                                verbose_name=_("is looking for people"))
+    looking_for_people_note = models.TextField(default="", null=False, blank=True,
+                                               verbose_name=_("looking for people note"))
     videoconferences = models.CharField(max_length=250, null=True, blank=True,
                                         choices=choices.VIDEOCONFERENCES_CHOICES,
                                         verbose_name=_("videoconference system"))
     videoconferences_extra_data = models.CharField(max_length=250, null=True, blank=True,
-                                             verbose_name=_("videoconference extra data"))
+                                                   verbose_name=_("videoconference extra data"))
 
-    default_options = JsonField(null=True, blank=True, verbose_name=_("default options"))
-    us_statuses = JsonField(null=True, blank=True, verbose_name=_("us statuses"))
-    points = JsonField(null=True, blank=True, verbose_name=_("points"))
-    task_statuses = JsonField(null=True, blank=True, verbose_name=_("task statuses"))
-    issue_statuses = JsonField(null=True, blank=True, verbose_name=_("issue statuses"))
-    issue_types = JsonField(null=True, blank=True, verbose_name=_("issue types"))
-    priorities = JsonField(null=True, blank=True, verbose_name=_("priorities"))
-    severities = JsonField(null=True, blank=True, verbose_name=_("severities"))
-    roles = JsonField(null=True, blank=True, verbose_name=_("roles"))
+    default_options = JSONField(null=True, blank=True, verbose_name=_("default options"))
+    epic_statuses = JSONField(null=True, blank=True, verbose_name=_("epic statuses"))
+    us_statuses = JSONField(null=True, blank=True, verbose_name=_("us statuses"))
+    points = JSONField(null=True, blank=True, verbose_name=_("points"))
+    task_statuses = JSONField(null=True, blank=True, verbose_name=_("task statuses"))
+    issue_statuses = JSONField(null=True, blank=True, verbose_name=_("issue statuses"))
+    issue_types = JSONField(null=True, blank=True, verbose_name=_("issue types"))
+    priorities = JSONField(null=True, blank=True, verbose_name=_("priorities"))
+    severities = JSONField(null=True, blank=True, verbose_name=_("severities"))
+    roles = JSONField(null=True, blank=True, verbose_name=_("roles"))
+    epic_custom_attributes = JSONField(null=True, blank=True, verbose_name=_("epic custom attributes"))
+    us_custom_attributes = JSONField(null=True, blank=True, verbose_name=_("us custom attributes"))
+    task_custom_attributes = JSONField(null=True, blank=True, verbose_name=_("task custom attributes"))
+    issue_custom_attributes = JSONField(null=True, blank=True, verbose_name=_("issue custom attributes"))
+
     _importing = None
 
     class Meta:
         verbose_name = "project template"
         verbose_name_plural = "project templates"
-        ordering = ["name"]
+        ordering = ["order", "name"]
 
     def __str__(self):
         return self.name
@@ -771,9 +803,13 @@ class ProjectTemplate(models.Model):
     def save(self, *args, **kwargs):
         if not self._importing or not self.modified_date:
             self.modified_date = timezone.now()
+        if not self.slug:
+            self.slug = slugify_uniquely(self.name, self.__class__)
         super().save(*args, **kwargs)
 
     def load_data_from_project(self, project):
+        self.is_contact_activated = project.is_contact_activated
+        self.is_epics_activated = project.is_epics_activated
         self.is_backlog_activated = project.is_backlog_activated
         self.is_kanban_activated = project.is_kanban_activated
         self.is_wiki_activated = project.is_wiki_activated
@@ -783,6 +819,7 @@ class ProjectTemplate(models.Model):
 
         self.default_options = {
             "points": getattr(project.default_points, "name", None),
+            "epic_status": getattr(project.default_epic_status, "name", None),
             "us_status": getattr(project.default_us_status, "name", None),
             "task_status": getattr(project.default_task_status, "name", None),
             "issue_status": getattr(project.default_issue_status, "name", None),
@@ -790,6 +827,16 @@ class ProjectTemplate(models.Model):
             "priority": getattr(project.default_priority, "name", None),
             "severity": getattr(project.default_severity, "name", None)
         }
+
+        self.epic_statuses = []
+        for epic_status in project.epic_statuses.all():
+            self.epic_statuses.append({
+                "name": epic_status.name,
+                "slug": epic_status.slug,
+                "is_closed": epic_status.is_closed,
+                "color": epic_status.color,
+                "order": epic_status.order,
+            })
 
         self.us_statuses = []
         for us_status in project.us_statuses.all():
@@ -865,11 +912,52 @@ class ProjectTemplate(models.Model):
                 "computable": role.computable
             })
 
+        self.epic_custom_attributes = []
+        for ca in project.epiccustomattributes.all():
+            self.epic_custom_attributes.append({
+                "name": ca.name,
+                "description": ca.description,
+                "type": ca.type,
+                "order": ca.order
+            })
+
+        self.us_custom_attributes = []
+        for ca in project.userstorycustomattributes.all():
+            self.us_custom_attributes.append({
+                "name": ca.name,
+                "description": ca.description,
+                "type": ca.type,
+                "order": ca.order
+            })
+
+        self.task_custom_attributes = []
+        for ca in project.taskcustomattributes.all():
+            self.task_custom_attributes.append({
+                "name": ca.name,
+                "description": ca.description,
+                "type": ca.type,
+                "order": ca.order
+            })
+
+        self.issue_custom_attributes = []
+        for ca in project.issuecustomattributes.all():
+            self.issue_custom_attributes.append({
+                "name": ca.name,
+                "description": ca.description,
+                "type": ca.type,
+                "order": ca.order
+            })
+
         try:
             owner_membership = Membership.objects.get(project=project, user=project.owner)
             self.default_owner_role = owner_membership.role.slug
         except Membership.DoesNotExist:
             self.default_owner_role = self.roles[0].get("slug", None)
+
+        self.tags = project.tags
+        self.tags_colors = project.tags_colors
+        self.is_looking_for_people = project.is_looking_for_people
+        self.looking_for_people_note = project.looking_for_people_note
 
     def apply_to_project(self, project):
         Role = apps.get_model("users", "Role")
@@ -878,12 +966,24 @@ class ProjectTemplate(models.Model):
             raise Exception("Project need an id (must be a saved project)")
 
         project.creation_template = self
+        project.is_contact_activated = self.is_contact_activated
+        project.is_epics_activated = self.is_epics_activated
         project.is_backlog_activated = self.is_backlog_activated
         project.is_kanban_activated = self.is_kanban_activated
         project.is_wiki_activated = self.is_wiki_activated
         project.is_issues_activated = self.is_issues_activated
         project.videoconferences = self.videoconferences
         project.videoconferences_extra_data = self.videoconferences_extra_data
+
+        for epic_status in self.epic_statuses:
+            EpicStatus.objects.create(
+                name=epic_status["name"],
+                slug=epic_status["slug"],
+                is_closed=epic_status["is_closed"],
+                color=epic_status["color"],
+                order=epic_status["order"],
+                project=project
+            )
 
         for us_status in self.us_statuses:
             UserStoryStatus.objects.create(
@@ -959,12 +1059,16 @@ class ProjectTemplate(models.Model):
                 permissions=role['permissions']
             )
 
-        if self.points:
-            project.default_points = Points.objects.get(name=self.default_options["points"],
-                                                        project=project)
+        if self.epic_statuses:
+            project.default_epic_status = EpicStatus.objects.get(name=self.default_options["epic_status"],
+                                                                 project=project)
+
         if self.us_statuses:
             project.default_us_status = UserStoryStatus.objects.get(name=self.default_options["us_status"],
                                                                     project=project)
+        if self.points:
+            project.default_points = Points.objects.get(name=self.default_options["points"],
+                                                        project=project)
 
         if self.task_statuses:
             project.default_task_status = TaskStatus.objects.get(name=self.default_options["task_status"],
@@ -978,9 +1082,52 @@ class ProjectTemplate(models.Model):
                                                                project=project)
 
         if self.priorities:
-            project.default_priority = Priority.objects.get(name=self.default_options["priority"], project=project)
+            project.default_priority = Priority.objects.get(name=self.default_options["priority"],
+                                                            project=project)
 
         if self.severities:
-            project.default_severity = Severity.objects.get(name=self.default_options["severity"], project=project)
+            project.default_severity = Severity.objects.get(name=self.default_options["severity"],
+                                                            project=project)
+
+        for ca in self.epic_custom_attributes:
+            EpicCustomAttribute.objects.create(
+                name=ca["name"],
+                description=ca["description"],
+                type=ca["type"],
+                order=ca["order"],
+                project=project
+            )
+
+        for ca in self.us_custom_attributes:
+            UserStoryCustomAttribute.objects.create(
+                name=ca["name"],
+                description=ca["description"],
+                type=ca["type"],
+                order=ca["order"],
+                project=project
+            )
+
+        for ca in self.task_custom_attributes:
+            TaskCustomAttribute.objects.create(
+                name=ca["name"],
+                description=ca["description"],
+                type=ca["type"],
+                order=ca["order"],
+                project=project
+            )
+
+        for ca in self.issue_custom_attributes:
+            IssueCustomAttribute.objects.create(
+                name=ca["name"],
+                description=ca["description"],
+                type=ca["type"],
+                order=ca["order"],
+                project=project
+            )
+
+        project.tags = self.tags
+        project.tags_colors = self.tags_colors
+        project.is_looking_for_people = self.is_looking_for_people
+        project.looking_for_people_note = self.looking_for_people_note
 
         return project

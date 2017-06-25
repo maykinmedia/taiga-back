@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -22,7 +22,7 @@ from taiga.base.api import viewsets
 
 from taiga.base import response
 from taiga.base.api.utils import get_object_or_404
-from taiga.permissions.service import user_has_perm
+from taiga.permissions.services import user_has_perm
 
 from . import services
 from . import serializers
@@ -40,6 +40,10 @@ class SearchViewSet(viewsets.ViewSet):
         result = {}
         with futures.ThreadPoolExecutor(max_workers=4) as executor:
             futures_list = []
+            if user_has_perm(request.user, "view_epics", project):
+                epics_future = executor.submit(self._search_epics, project, text)
+                epics_future.result_key = "epics"
+                futures_list.append(epics_future)
             if user_has_perm(request.user, "view_us", project):
                 uss_future = executor.submit(self._search_user_stories, project, text)
                 uss_future.result_key = "userstories"
@@ -72,6 +76,11 @@ class SearchViewSet(viewsets.ViewSet):
     def _get_project(self, project_id):
         project_model = apps.get_model("projects", "Project")
         return get_object_or_404(project_model, pk=project_id)
+
+    def _search_epics(self, project, text):
+        queryset = services.search_epics(project, text)
+        serializer = serializers.EpicSearchResultsSerializer(queryset, many=True)
+        return serializer.data
 
     def _search_user_stories(self, project, text):
         queryset = services.search_user_stories(project, text)

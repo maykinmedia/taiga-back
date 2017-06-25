@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -46,13 +46,11 @@ def dump_project(self, user, project, dump_format):
     try:
         if dump_format == "gzip":
             path = "exports/{}/{}-{}.json.gz".format(project.pk, project.slug, self.request.id)
-            storage_path = default_storage.path(path)
-            with default_storage.open(storage_path, mode="wb") as outfile:
+            with default_storage.open(path, mode="wb") as outfile:
                 services.render_project(project, gzip.GzipFile(fileobj=outfile))
         else:
             path = "exports/{}/{}-{}.json".format(project.pk, project.slug, self.request.id)
-            storage_path = default_storage.path(path)
-            with default_storage.open(storage_path, mode="wb") as outfile:
+            with default_storage.open(path, mode="wb") as outfile:
                 services.render_project(project, outfile)
 
         url = default_storage.url(path)

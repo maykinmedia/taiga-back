@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2016 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -27,7 +27,7 @@ from .utils import DUMMY_BMP_DATA
 
 import factory
 
-from taiga.permissions.permissions import MEMBERS_PERMISSIONS
+from taiga.permissions.choices import MEMBERS_PERMISSIONS
 
 
 
@@ -57,6 +57,7 @@ class ProjectTemplateFactory(Factory):
     slug = settings.DEFAULT_PROJECT_TEMPLATE
     description = factory.Sequence(lambda n: "Description {}".format(n))
 
+    epic_statuses = []
     us_statuses = []
     points = []
     task_statuses = []
@@ -65,6 +66,10 @@ class ProjectTemplateFactory(Factory):
     priorities = []
     severities = []
     roles = []
+    epic_custom_attributes = []
+    us_custom_attributes = []
+    task_custom_attributes = []
+    issue_custom_attributes = []
     default_owner_role = "tester"
 
 
@@ -118,6 +123,17 @@ class RolePointsFactory(Factory):
     user_story = factory.SubFactory("tests.factories.UserStoryFactory")
     role = factory.SubFactory("tests.factories.RoleFactory")
     points = factory.SubFactory("tests.factories.PointsFactory")
+
+
+class EpicAttachmentFactory(Factory):
+    project = factory.SubFactory("tests.factories.ProjectFactory")
+    owner = factory.SubFactory("tests.factories.UserFactory")
+    content_object = factory.SubFactory("tests.factories.EpicFactory")
+    attached_file = factory.django.FileField(data=b"File contents")
+
+    class Meta:
+        model = "attachments.Attachment"
+        strategy = factory.CREATE_STRATEGY
 
 
 class UserStoryAttachmentFactory(Factory):
@@ -229,36 +245,26 @@ class StorageEntryFactory(Factory):
     value = factory.Sequence(lambda n: {"value": "value-{}".format(n)})
 
 
-class UserStoryFactory(Factory):
+class EpicFactory(Factory):
     class Meta:
-        model = "userstories.UserStory"
+        model = "epics.Epic"
         strategy = factory.CREATE_STRATEGY
 
     ref = factory.Sequence(lambda n: n)
     project = factory.SubFactory("tests.factories.ProjectFactory")
     owner = factory.SubFactory("tests.factories.UserFactory")
-    subject = factory.Sequence(lambda n: "User Story {}".format(n))
-    description = factory.Sequence(lambda n: "User Story {} description".format(n))
-    status = factory.SubFactory("tests.factories.UserStoryStatusFactory")
-    milestone = factory.SubFactory("tests.factories.MilestoneFactory")
+    subject = factory.Sequence(lambda n: "Epic {}".format(n))
+    description = factory.Sequence(lambda n: "Epic {} description".format(n))
+    status = factory.SubFactory("tests.factories.EpicStatusFactory")
 
 
-class UserStoryStatusFactory(Factory):
+class RelatedUserStory(Factory):
     class Meta:
-        model = "projects.UserStoryStatus"
+        model = "epics.RelatedUserStory"
         strategy = factory.CREATE_STRATEGY
 
-    name = factory.Sequence(lambda n: "User Story status {}".format(n))
-    project = factory.SubFactory("tests.factories.ProjectFactory")
-
-
-class TaskStatusFactory(Factory):
-    class Meta:
-        model = "projects.TaskStatus"
-        strategy = factory.CREATE_STRATEGY
-
-    name = factory.Sequence(lambda n: "Task status {}".format(n))
-    project = factory.SubFactory("tests.factories.ProjectFactory")
+    epic = factory.SubFactory("tests.factories.EpicFactory")
+    user_story = factory.SubFactory("tests.factories.UserStoryFactory")
 
 
 class MilestoneFactory(Factory):
@@ -271,6 +277,37 @@ class MilestoneFactory(Factory):
     project = factory.SubFactory("tests.factories.ProjectFactory")
     estimated_start = factory.LazyAttribute(lambda o: date.today())
     estimated_finish = factory.LazyAttribute(lambda o: o.estimated_start + timedelta(days=7))
+
+
+class UserStoryFactory(Factory):
+    class Meta:
+        model = "userstories.UserStory"
+        strategy = factory.CREATE_STRATEGY
+
+    ref = factory.Sequence(lambda n: n)
+    project = factory.SubFactory("tests.factories.ProjectFactory")
+    owner = factory.SubFactory("tests.factories.UserFactory")
+    subject = factory.Sequence(lambda n: "User Story {}".format(n))
+    description = factory.Sequence(lambda n: "User Story {} description".format(n))
+    status = factory.SubFactory("tests.factories.UserStoryStatusFactory")
+    milestone = factory.SubFactory("tests.factories.MilestoneFactory")
+    tags = factory.Faker("words")
+
+
+class TaskFactory(Factory):
+    class Meta:
+        model = "tasks.Task"
+        strategy = factory.CREATE_STRATEGY
+
+    ref = factory.Sequence(lambda n: n)
+    subject = factory.Sequence(lambda n: "Task {}".format(n))
+    description = factory.Sequence(lambda n: "Task {} description".format(n))
+    owner = factory.SubFactory("tests.factories.UserFactory")
+    project = factory.SubFactory("tests.factories.ProjectFactory")
+    status = factory.SubFactory("tests.factories.TaskStatusFactory")
+    milestone = factory.SubFactory("tests.factories.MilestoneFactory")
+    user_story = factory.SubFactory("tests.factories.UserStoryFactory")
+    tags = factory.Faker("words")
 
 
 class IssueFactory(Factory):
@@ -288,22 +325,7 @@ class IssueFactory(Factory):
     priority = factory.SubFactory("tests.factories.PriorityFactory")
     type = factory.SubFactory("tests.factories.IssueTypeFactory")
     milestone = factory.SubFactory("tests.factories.MilestoneFactory")
-
-
-class TaskFactory(Factory):
-    class Meta:
-        model = "tasks.Task"
-        strategy = factory.CREATE_STRATEGY
-
-    ref = factory.Sequence(lambda n: n)
-    subject = factory.Sequence(lambda n: "Task {}".format(n))
-    description = factory.Sequence(lambda n: "Task {} description".format(n))
-    owner = factory.SubFactory("tests.factories.UserFactory")
-    project = factory.SubFactory("tests.factories.ProjectFactory")
-    status = factory.SubFactory("tests.factories.TaskStatusFactory")
-    milestone = factory.SubFactory("tests.factories.MilestoneFactory")
-    user_story = factory.SubFactory("tests.factories.UserStoryFactory")
-    tags = []
+    tags = factory.Faker("words")
 
 
 class WikiPageFactory(Factory):
@@ -326,6 +348,33 @@ class WikiLinkFactory(Factory):
     title = factory.Sequence(lambda n: "Wiki Link {} title".format(n))
     href = factory.Sequence(lambda n: "link-{}".format(n))
     order = factory.Sequence(lambda n: n)
+
+
+class EpicStatusFactory(Factory):
+    class Meta:
+        model = "projects.EpicStatus"
+        strategy = factory.CREATE_STRATEGY
+
+    name = factory.Sequence(lambda n: "Epic status {}".format(n))
+    project = factory.SubFactory("tests.factories.ProjectFactory")
+
+
+class UserStoryStatusFactory(Factory):
+    class Meta:
+        model = "projects.UserStoryStatus"
+        strategy = factory.CREATE_STRATEGY
+
+    name = factory.Sequence(lambda n: "User Story status {}".format(n))
+    project = factory.SubFactory("tests.factories.ProjectFactory")
+
+
+class TaskStatusFactory(Factory):
+    class Meta:
+        model = "projects.TaskStatus"
+        strategy = factory.CREATE_STRATEGY
+
+    name = factory.Sequence(lambda n: "Task status {}".format(n))
+    project = factory.SubFactory("tests.factories.ProjectFactory")
 
 
 class IssueStatusFactory(Factory):
@@ -364,6 +413,16 @@ class IssueTypeFactory(Factory):
     project = factory.SubFactory("tests.factories.ProjectFactory")
 
 
+class EpicCustomAttributeFactory(Factory):
+    class Meta:
+        model = "custom_attributes.EpicCustomAttribute"
+        strategy = factory.CREATE_STRATEGY
+
+    name = factory.Sequence(lambda n: "Epic Custom Attribute {}".format(n))
+    description = factory.Sequence(lambda n: "Description for Epic Custom Attribute {}".format(n))
+    project = factory.SubFactory("tests.factories.ProjectFactory")
+
+
 class UserStoryCustomAttributeFactory(Factory):
     class Meta:
         model = "custom_attributes.UserStoryCustomAttribute"
@@ -392,6 +451,15 @@ class IssueCustomAttributeFactory(Factory):
     name = factory.Sequence(lambda n: "Issue Custom Attribute {}".format(n))
     description = factory.Sequence(lambda n: "Description for Issue Custom Attribute {}".format(n))
     project = factory.SubFactory("tests.factories.ProjectFactory")
+
+
+class EpicCustomAttributesValuesFactory(Factory):
+    class Meta:
+        model = "custom_attributes.EpicCustomAttributesValues"
+        strategy = factory.CREATE_STRATEGY
+
+    attributes_values = {}
+    epic = factory.SubFactory("tests.factories.EpicFactory")
 
 
 class UserStoryCustomAttributesValuesFactory(Factory):
@@ -496,7 +564,6 @@ class ApplicationFactory(Factory):
         model = "external_apps.Application"
         strategy = factory.CREATE_STRATEGY
 
-    key = "testingkey"
 
 class ApplicationTokenFactory(Factory):
     class Meta:
@@ -606,6 +673,26 @@ def create_userstory(**kwargs):
     return UserStoryFactory(**defaults)
 
 
+def create_epic(**kwargs):
+    "Create an epic along with its dependencies"
+
+    owner = kwargs.pop("owner", None)
+    if not owner:
+        owner = UserFactory.create()
+
+    project = kwargs.pop("project", None)
+    if project is None:
+        project = ProjectFactory.create(owner=owner)
+
+    defaults = {
+        "project": project,
+        "owner": owner,
+    }
+    defaults.update(kwargs)
+
+    return EpicFactory(**defaults)
+
+
 def create_project(**kwargs):
     "Create a project along with its dependencies"
     defaults = {}
@@ -620,6 +707,7 @@ def create_project(**kwargs):
     project.default_issue_type = IssueTypeFactory.create(project=project)
     project.default_us_status = UserStoryStatusFactory.create(project=project)
     project.default_task_status = TaskStatusFactory.create(project=project)
+    project.default_epic_status = EpicStatusFactory.create(project=project)
 
     project.save()
 

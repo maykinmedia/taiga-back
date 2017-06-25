@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -30,6 +30,7 @@ from taiga.base.decorators import detail_route
 
 from . import models
 from . import serializers
+from . import validators
 from . import permissions
 from . import tasks
 
@@ -37,6 +38,7 @@ from . import tasks
 class WebhookViewSet(BlockedByProjectMixin, ModelCrudViewSet):
     model = models.Webhook
     serializer_class = serializers.WebhookSerializer
+    validator_class = validators.WebhookValidator
     permission_classes = (permissions.WebhookPermission,)
     filter_backends = (filters.IsProjectAdminFilterBackend,)
     filter_fields = ("project",)

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -23,7 +23,7 @@ import django_sites as sites
 import re
 
 from taiga.base.utils.urls import get_absolute_url, is_absolute_url, build_url
-from taiga.base.utils.db import save_in_bulk, update_in_bulk, update_in_bulk_with_ids, to_tsquery
+from taiga.base.utils.db import save_in_bulk, update_in_bulk, to_tsquery
 
 pytestmark = pytest.mark.django_db
 
@@ -80,21 +80,6 @@ def test_update_in_bulk_with_a_callback():
     update_in_bulk(instances, new_values, callback)
 
     assert callback.call_count == 2
-
-
-def test_update_in_bulk_with_ids():
-    ids = [1, 2]
-    new_values = [{"field1": 1}, {"field2": 2}]
-    model = mock.Mock()
-
-    update_in_bulk_with_ids(ids, new_values, model)
-
-    expected_calls = [
-        mock.call(id=1), mock.call().update(field1=1),
-        mock.call(id=2), mock.call().update(field2=2)
-    ]
-
-    model.objects.filter.assert_has_calls(expected_calls)
 
 
 TS_QUERY_TRANSFORMATIONS = [

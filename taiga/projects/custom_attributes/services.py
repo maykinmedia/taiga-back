@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -18,6 +18,23 @@
 
 from django.db import transaction
 from django.db import connection
+
+
+@transaction.atomic
+def bulk_update_epic_custom_attribute_order(project, user, data):
+    cursor = connection.cursor()
+
+    sql = """
+    prepare bulk_update_order as update custom_attributes_epiccustomattribute set "order" = $1
+        where custom_attributes_epiccustomattribute.id = $2 and
+              custom_attributes_epiccustomattribute.project_id = $3;
+    """
+    cursor.execute(sql)
+    for id, order in data:
+        cursor.execute("EXECUTE bulk_update_order (%s, %s, %s);",
+                       (order, id, project.id))
+    cursor.execute("DEALLOCATE bulk_update_order")
+    cursor.close()
 
 
 @transaction.atomic

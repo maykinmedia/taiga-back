@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -20,8 +20,9 @@ from django.db import models
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
 
-from django_pgjson.fields import JsonField
+from taiga.base.db.models.fields import JSONField
 
+from taiga.base.utils.time import timestamp_ms
 from taiga.projects.occ.mixins import OCCModelMixin
 
 from . import choices
@@ -31,14 +32,13 @@ from . import choices
 #  Custom Attribute Models
 #######################################################
 
-
 class AbstractCustomAttribute(models.Model):
     name = models.CharField(null=False, blank=False, max_length=64, verbose_name=_("name"))
     description = models.TextField(null=False, blank=True, verbose_name=_("description"))
     type = models.CharField(null=False, blank=False, max_length=16,
                             choices=choices.TYPES_CHOICES, default=choices.TEXT_TYPE,
                             verbose_name=_("type"))
-    order = models.IntegerField(null=False, blank=False, default=10000, verbose_name=_("order"))
+    order = models.BigIntegerField(null=False, blank=False, default=timestamp_ms, verbose_name=_("order"))
     project = models.ForeignKey("projects.Project", null=False, blank=False, related_name="%(class)ss",
                                 verbose_name=_("project"))
 
@@ -61,6 +61,12 @@ class AbstractCustomAttribute(models.Model):
             self.modified_date = timezone.now()
 
         return super().save(*args, **kwargs)
+
+
+class EpicCustomAttribute(AbstractCustomAttribute):
+    class Meta(AbstractCustomAttribute.Meta):
+        verbose_name = "epic custom attribute"
+        verbose_name_plural = "epic custom attributes"
 
 
 class UserStoryCustomAttribute(AbstractCustomAttribute):
@@ -86,11 +92,27 @@ class IssueCustomAttribute(AbstractCustomAttribute):
 #######################################################
 
 class AbstractCustomAttributesValues(OCCModelMixin, models.Model):
-    attributes_values = JsonField(null=False, blank=False, default={}, verbose_name=_("values"))
+    attributes_values = JSONField(null=False, blank=False, default={}, verbose_name=_("values"))
 
     class Meta:
         abstract = True
         ordering = ["id"]
+
+
+class EpicCustomAttributesValues(AbstractCustomAttributesValues):
+    epic = models.OneToOneField("epics.Epic",
+                                null=False, blank=False, related_name="custom_attributes_values",
+                                verbose_name=_("epic"))
+
+    class Meta(AbstractCustomAttributesValues.Meta):
+        verbose_name = "epic custom attributes values"
+        verbose_name_plural = "epic custom attributes values"
+        index_together = [("epic",)]
+
+    @property
+    def project(self):
+        # NOTE: This property simplifies checking permissions
+        return self.epic.project
 
 
 class UserStoryCustomAttributesValues(AbstractCustomAttributesValues):
@@ -99,7 +121,7 @@ class UserStoryCustomAttributesValues(AbstractCustomAttributesValues):
                                       verbose_name=_("user story"))
 
     class Meta(AbstractCustomAttributesValues.Meta):
-        verbose_name = "user story ustom attributes values"
+        verbose_name = "user story custom attributes values"
         verbose_name_plural = "user story custom attributes values"
         index_together = [("user_story",)]
 
@@ -115,7 +137,7 @@ class TaskCustomAttributesValues(AbstractCustomAttributesValues):
                                 verbose_name=_("task"))
 
     class Meta(AbstractCustomAttributesValues.Meta):
-        verbose_name = "task ustom attributes values"
+        verbose_name = "task custom attributes values"
         verbose_name_plural = "task custom attributes values"
         index_together = [("task",)]
 
@@ -131,7 +153,7 @@ class IssueCustomAttributesValues(AbstractCustomAttributesValues):
                                  verbose_name=_("issue"))
 
     class Meta(AbstractCustomAttributesValues.Meta):
-        verbose_name = "issue ustom attributes values"
+        verbose_name = "issue custom attributes values"
         verbose_name_plural = "issue custom attributes values"
         index_together = [("issue",)]
 

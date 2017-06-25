@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -22,7 +22,7 @@ from django.db.models import signals
 
 
 def connect_issues_signals():
-    from taiga.projects import signals as generic_handlers
+    from taiga.projects.tagging import signals as tagging_handlers
     from . import signals as handlers
 
     # Finished date
@@ -31,15 +31,9 @@ def connect_issues_signals():
                              dispatch_uid="set_finished_date_when_edit_issue")
 
     # Tags
-    signals.pre_save.connect(generic_handlers.tags_normalization,
+    signals.pre_save.connect(tagging_handlers.tags_normalization,
                              sender=apps.get_model("issues", "Issue"),
                              dispatch_uid="tags_normalization_issue")
-    signals.post_save.connect(generic_handlers.update_project_tags_when_create_or_edit_taggable_item,
-                              sender=apps.get_model("issues", "Issue"),
-                              dispatch_uid="update_project_tags_when_create_or_edit_taggable_item_issue")
-    signals.post_delete.connect(generic_handlers.update_project_tags_when_delete_taggable_item,
-                                sender=apps.get_model("issues", "Issue"),
-                                dispatch_uid="update_project_tags_when_delete_taggable_item_issue")
 
 
 def connect_issues_custom_attributes_signals():
@@ -56,14 +50,15 @@ def connect_all_issues_signals():
 
 
 def disconnect_issues_signals():
-    signals.pre_save.disconnect(sender=apps.get_model("issues", "Issue"), dispatch_uid="set_finished_date_when_edit_issue")
-    signals.pre_save.disconnect(sender=apps.get_model("issues", "Issue"), dispatch_uid="tags_normalization_issue")
-    signals.post_save.disconnect(sender=apps.get_model("issues", "Issue"), dispatch_uid="update_project_tags_when_create_or_edit_taggable_item_issue")
-    signals.post_delete.disconnect(sender=apps.get_model("issues", "Issue"), dispatch_uid="update_project_tags_when_delete_taggable_item_issue")
+    signals.pre_save.disconnect(sender=apps.get_model("issues", "Issue"),
+                                dispatch_uid="set_finished_date_when_edit_issue")
+    signals.pre_save.disconnect(sender=apps.get_model("issues", "Issue"),
+                                dispatch_uid="tags_normalization_issue")
 
 
 def disconnect_issues_custom_attributes_signals():
-    signals.post_save.disconnect(sender=apps.get_model("issues", "Issue"), dispatch_uid="create_custom_attribute_value_when_create_issue")
+    signals.post_save.disconnect(sender=apps.get_model("issues", "Issue"),
+                                 dispatch_uid="create_custom_attribute_value_when_create_issue")
 
 
 def disconnect_all_issues_signals():

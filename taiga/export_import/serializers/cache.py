@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -23,7 +23,11 @@ _cache_user_by_email = {}
 _custom_tasks_attributes_cache = {}
 _custom_issues_attributes_cache = {}
 _custom_userstories_attributes_cache = {}
-
+_custom_epics_attributes_cache = {}
+_tasks_statuses_cache = {}
+_issues_statuses_cache = {}
+_userstories_statuses_cache = {}
+_epics_statuses_cache = {}
 
 def cached_get_user_by_pk(pk):
     if pk not in _cache_user_by_pk:

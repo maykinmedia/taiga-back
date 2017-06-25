@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2016 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -17,14 +17,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from django.contrib.auth import get_user_model
-
 from taiga.base.api import serializers
+from taiga.base.fields import Field, MethodField
 
 
-class VoterSerializer(serializers.ModelSerializer):
-    full_name = serializers.CharField(source='get_full_name', required=False)
+class VoterSerializer(serializers.LightSerializer):
+    id = Field()
+    username = Field()
+    full_name = MethodField()
 
-    class Meta:
-        model = get_user_model()
-        fields = ('id', 'username', 'full_name')
+    def get_full_name(self, obj):
+        return obj.get_full_name()

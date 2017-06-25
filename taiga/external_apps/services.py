@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -22,8 +22,6 @@ from taiga.base.api.utils import get_object_or_404
 
 from django.apps import apps
 from django.utils.translation import ugettext as _
-
-from . import encryption
 
 import json
 
@@ -46,11 +44,3 @@ def authorize_token(application_id:int, user:object, state:str) -> object:
     token.state = state
     token.save()
     return token
-
-
-def cypher_token(application_token:object) -> str:
-    content = {
-        "token": application_token.token
-    }
-
-    return encryption.encrypt(json.dumps(content), application_token.application.key)

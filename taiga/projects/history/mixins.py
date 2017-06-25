@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -20,6 +20,9 @@ import warnings
 
 from .services import take_snapshot
 from taiga.projects.notifications import services as notifications_services
+from taiga.base.api import serializers
+from taiga.base.fields import MethodField
+
 
 class HistoryResourceMixin(object):
     """
@@ -56,13 +59,15 @@ class HistoryResourceMixin(object):
         """
 
         user = self.request.user
-        comment = self.request.DATA.get("comment", "")
+        comment = ""
+        if isinstance(self.request.DATA, dict):
+            comment = self.request.DATA.get("comment", "")
 
         if obj is None:
             obj = self.get_object()
 
         sobj = self.get_object_for_snapshot(obj)
-        if sobj != obj and delete:
+        if sobj != obj:
             delete = False
 
         notifications_services.analize_object_for_watchers(obj, comment, user)
@@ -77,3 +82,11 @@ class HistoryResourceMixin(object):
     def pre_delete(self, obj):
         self.persist_history_snapshot(obj, delete=True)
         super().pre_delete(obj)
+
+
+class TotalCommentsSerializerMixin(serializers.LightSerializer):
+    total_comments = MethodField()
+
+    def get_total_comments(self, obj):
+        # The "total_comments" attribute is attached in the get_queryset of the viewset.
+        return getattr(obj, "total_comments", 0) or 0

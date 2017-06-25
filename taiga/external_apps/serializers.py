@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -16,9 +16,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import json
-
 from taiga.base.api import serializers
+from taiga.base.fields import Field
 
 from . import models
 from . import services
@@ -26,33 +25,27 @@ from . import services
 from django.utils.translation import ugettext as _
 
 
-class ApplicationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.Application
-        fields = ("id", "name", "web", "description", "icon_url")
+class ApplicationSerializer(serializers.LightSerializer):
+    id = Field()
+    name = Field()
+    web = Field()
+    description = Field()
+    icon_url = Field()
 
 
-class ApplicationTokenSerializer(serializers.ModelSerializer):
-    cyphered_token = serializers.CharField(source="cyphered_token", read_only=True)
-    next_url = serializers.CharField(source="next_url", read_only=True)
-    application = ApplicationSerializer(read_only=True)
-
-    class Meta:
-        model = models.ApplicationToken
-        fields = ("user", "id", "application", "auth_code", "next_url")
+class ApplicationTokenSerializer(serializers.LightSerializer):
+    id = Field()
+    user = Field(attr="user_id")
+    application = ApplicationSerializer()
+    auth_code = Field()
+    next_url = Field()
 
 
-class AuthorizationCodeSerializer(serializers.ModelSerializer):
-    next_url = serializers.CharField(source="next_url", read_only=True)
-    class Meta:
-        model = models.ApplicationToken
-        fields = ("auth_code", "state", "next_url")
+class AuthorizationCodeSerializer(serializers.LightSerializer):
+    state = Field()
+    auth_code = Field()
+    next_url = Field()
 
 
-class AccessTokenSerializer(serializers.ModelSerializer):
-    cyphered_token = serializers.CharField(source="cyphered_token", read_only=True)
-    next_url = serializers.CharField(source="next_url", read_only=True)
-
-    class Meta:
-        model = models.ApplicationToken
-        fields = ("cyphered_token", )
+class AccessTokenSerializer(serializers.LightSerializer):
+    token = Field()

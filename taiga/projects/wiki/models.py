@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -21,7 +21,10 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.conf import settings
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
+from django_pglocks import advisory_lock
+
 from taiga.base.utils.slug import slugify_uniquely_for_queryset
+from taiga.base.utils.time import timestamp_ms
 from taiga.projects.notifications.mixins import WatchedModelMixin
 from taiga.projects.occ import OCCModelMixin
 
@@ -30,7 +33,7 @@ class WikiPage(OCCModelMixin, WatchedModelMixin, models.Model):
     project = models.ForeignKey("projects.Project", null=False, blank=False,
                                 related_name="wiki_pages", verbose_name=_("project"))
     slug = models.SlugField(max_length=500, db_index=True, null=False, blank=False,
-                            verbose_name=_("slug"))
+                            verbose_name=_("slug"), allow_unicode=True)
     content = models.TextField(null=False, blank=True,
                                verbose_name=_("content"))
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
@@ -70,13 +73,13 @@ class WikiLink(models.Model):
     title = models.CharField(max_length=500, null=False, blank=False)
     href = models.SlugField(max_length=500, db_index=True, null=False, blank=False,
                             verbose_name=_("href"))
-    order = models.PositiveSmallIntegerField(default=1, null=False, blank=False,
+    order = models.BigIntegerField(null=False, blank=False, default=timestamp_ms,
                                              verbose_name=_("order"))
 
     class Meta:
         verbose_name = "wiki link"
         verbose_name_plural = "wiki links"
-        ordering = ["project", "order"]
+        ordering = ["project", "order", "id"]
         unique_together = ("project", "href")
 
     def __str__(self):
@@ -84,7 +87,9 @@ class WikiLink(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.href:
-            wl_qs = self.project.wiki_links.all()
-            self.href = slugify_uniquely_for_queryset(self.title, wl_qs, slugfield="href")
-
-        super().save(*args, **kwargs)
+            with advisory_lock("wiki-page-creation-{}".format(self.project_id)):
+                wl_qs = self.project.wiki_links.all()
+                self.href = slugify_uniquely_for_queryset(self.title, wl_qs, slugfield="href")
+                super().save(*args, **kwargs)
+        else:
+            super().save(*args, **kwargs)

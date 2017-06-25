@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -132,6 +132,25 @@ class ViewSetMixin(object):
         if action is None:
             action = self.action
         return super().check_permissions(request, action=action, obj=obj)
+
+
+class NestedViewSetMixin(object):
+    def get_queryset(self):
+        return self._filter_queryset_by_parents_lookups(super().get_queryset())
+
+    def _filter_queryset_by_parents_lookups(self, queryset):
+        parents_query_dict = self._get_parents_query_dict()
+        if parents_query_dict:
+            return queryset.filter(**parents_query_dict)
+        else:
+            return queryset
+
+    def _get_parents_query_dict(self):
+        result = {}
+        for kwarg_name in self.kwargs:
+            query_value = self.kwargs.get(kwarg_name)
+            result[kwarg_name] = query_value
+        return result
 
 
 class ViewSet(ViewSetMixin, views.APIView):

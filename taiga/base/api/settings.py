@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -76,7 +76,6 @@ DEFAULTS = {
     # Base API policies
     "DEFAULT_RENDERER_CLASSES": (
         "taiga.base.api.renderers.JSONRenderer",
-        "taiga.base.api.renderers.BrowsableAPIRenderer",
     ),
     "DEFAULT_PARSER_CLASSES": (
         "taiga.base.api.parsers.JSONParser",
@@ -98,6 +97,8 @@ DEFAULTS = {
     # Genric view behavior
     "DEFAULT_MODEL_SERIALIZER_CLASS":
         "taiga.base.api.serializers.ModelSerializer",
+    "DEFAULT_MODEL_VALIDATOR_CLASS":
+        "taiga.base.api.validators.ModelValidator",
     "DEFAULT_FILTER_BACKENDS": (),
 
     # Throttling
@@ -105,6 +106,7 @@ DEFAULTS = {
         "user": None,
         "anon": None,
     },
+    "DEFAULT_THROTTLE_WHITELIST": [],
 
     # Pagination
     "PAGINATE_BY": None,

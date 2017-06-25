@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2016 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -19,7 +19,6 @@
 
 import pytest
 from unittest.mock import patch
-from unittest.mock import Mock
 
 from .. import factories as f
 
@@ -28,8 +27,6 @@ from taiga.projects.history import services
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
-
-from taiga.base.utils import json
 
 def test_webhooks_when_create_issue(settings):
     settings.WEBHOOKS_ENABLED = True
@@ -79,7 +76,7 @@ def test_webhooks_when_update_issue(settings):
         assert data["data"]["subject"] == obj.subject
         assert data["change"]["comment"] == "test_comment"
         assert data["change"]["diff"]["subject"]["to"] == data["data"]["subject"]
-        assert data["change"]["diff"]["subject"]["from"] !=  data["data"]["subject"]
+        assert data["change"]["diff"]["subject"]["from"] != data["data"]["subject"]
 
 
 def test_webhooks_when_delete_issue(settings):

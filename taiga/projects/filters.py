@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.be>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.be>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -45,7 +45,7 @@ class DiscoverModeFilterBackend(FilterBackend):
                 if request.QUERY_PARAMS.get("is_featured", None) == 'true':
                     qs = qs.order_by("?")
 
-        return super().filter_queryset(request, qs.distinct(), view)
+        return super().filter_queryset(request, qs, view)
 
 
 class CanViewProjectObjFilterBackend(FilterBackend):
@@ -86,7 +86,7 @@ class CanViewProjectObjFilterBackend(FilterBackend):
             # external users / anonymous
             qs = qs.filter(anon_permissions__contains=["view_project"])
 
-        return super().filter_queryset(request, qs.distinct(), view)
+        return super().filter_queryset(request, qs, view)
 
 
 class QFilterBackend(FilterBackend):
@@ -94,15 +94,15 @@ class QFilterBackend(FilterBackend):
         # NOTE: See migtration 0033_text_search_indexes
         q = request.QUERY_PARAMS.get('q', None)
         if q:
-            tsquery = "to_tsquery('english_nostop', %s)"
+            tsquery = "to_tsquery('simple', %s)"
             tsquery_params = [to_tsquery(q)]
             tsvector = """
-                 setweight(to_tsvector('english_nostop',
-                                       coalesce(projects_project.name, '')), 'A') ||
-                 setweight(to_tsvector('english_nostop',
-                                       coalesce(inmutable_array_to_string(projects_project.tags), '')), 'B') ||
-                 setweight(to_tsvector('english_nostop',
-                                       coalesce(projects_project.description, '')), 'C')
+             setweight(to_tsvector('simple',
+                                   coalesce(projects_project.name, '')), 'A') ||
+             setweight(to_tsvector('simple',
+                                   coalesce(inmutable_array_to_string(projects_project.tags), '')), 'B') ||
+             setweight(to_tsvector('simple',
+                                   coalesce(projects_project.description, '')), 'C')
             """
 
             select = {
@@ -111,7 +111,7 @@ class QFilterBackend(FilterBackend):
             }
             select_params = tsquery_params
             where = ["{tsvector} @@ {tsquery}".format(tsquery=tsquery,
-                                                      tsvector=tsvector),]
+                                                      tsvector=tsvector), ]
             params = tsquery_params
             order_by = ["-rank", ]
 
@@ -120,4 +120,35 @@ class QFilterBackend(FilterBackend):
                                       where=where,
                                       params=params,
                                       order_by=order_by)
+        return queryset
+
+
+class UserOrderFilterBackend(FilterBackend):
+    def filter_queryset(self, request, queryset, view):
+        if request.user.is_anonymous():
+            return queryset
+
+        raw_fieldname = request.QUERY_PARAMS.get(self.order_by_query_param, None)
+        if not raw_fieldname:
+            return queryset
+
+        if raw_fieldname.startswith("-"):
+            field_name = raw_fieldname[1:]
+        else:
+            field_name = raw_fieldname
+
+        if field_name != "user_order":
+            return queryset
+
+        model = queryset.model
+        sql = """SELECT projects_membership.user_order
+                 FROM projects_membership
+                 WHERE
+                    projects_membership.project_id = {tbl}.id AND
+                    projects_membership.user_id = {user_id}
+              """
+
+        sql = sql.format(tbl=model._meta.db_table, user_id=request.user.id)
+        queryset = queryset.extra(select={"user_order": sql})
+        queryset = queryset.order_by(raw_fieldname)
         return queryset

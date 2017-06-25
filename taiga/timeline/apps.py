@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -33,8 +33,8 @@ class TimelineAppConfig(AppConfig):
                                   sender=apps.get_model("history", "HistoryEntry"),
                                   dispatch_uid="timeline")
         signals.post_save.connect(handlers.create_membership_push_to_timeline,
-                                                 sender=apps.get_model("projects", "Membership"))
+                                  sender=apps.get_model("projects", "Membership"))
         signals.pre_delete.connect(handlers.delete_membership_push_to_timeline,
-                                                sender=apps.get_model("projects", "Membership"))
+                                   sender=apps.get_model("projects", "Membership"))
         signals.post_save.connect(handlers.create_user_push_to_timeline,
-                                                 sender=get_user_model())
+                                  sender=get_user_model())

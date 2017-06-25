@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.django_db
 
 
 def test_export_issue_finish_date(client):
-    issue = f.IssueFactory.create(finished_date="2014-10-22")
+    issue = f.IssueFactory.create(finished_date="2014-10-22T00:00:00+0000")
     output = io.BytesIO()
     render_project(issue.project, output)
     project_data = json.loads(output.getvalue())
@@ -36,9 +36,23 @@ def test_export_issue_finish_date(client):
 
 
 def test_export_user_story_finish_date(client):
-    user_story = f.UserStoryFactory.create(finish_date="2014-10-22")
+    user_story = f.UserStoryFactory.create(finish_date="2014-10-22T00:00:00+0000")
     output = io.BytesIO()
     render_project(user_story.project, output)
     project_data = json.loads(output.getvalue())
     finish_date = project_data["user_stories"][0]["finish_date"]
     assert finish_date == "2014-10-22T00:00:00+0000"
+
+
+def test_export_epic_with_user_stories(client):
+    epic = f.EpicFactory.create(subject="test epic export")
+    user_story = f.UserStoryFactory.create(project=epic.project)
+    f.RelatedUserStory.create(epic=epic, user_story=user_story)
+    output = io.BytesIO()
+    render_project(user_story.project, output)
+    project_data = json.loads(output.getvalue())
+    assert project_data["epics"][0]["subject"] == "test epic export"
+    assert len(project_data["epics"]) == 1
+
+    assert project_data["epics"][0]["related_user_stories"][0]["user_story"] == user_story.ref
+    assert len(project_data["epics"][0]["related_user_stories"]) == 1

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -18,10 +18,8 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.apps import apps
 
 from taiga.base import response
-from taiga.base.api.utils import get_object_or_404
 from taiga.base.api import ReadOnlyListViewSet
 
 from . import serializers
@@ -36,7 +34,7 @@ class TimelineViewSet(ReadOnlyListViewSet):
 
     def get_content_type(self):
         app_name, model = self.content_type.split(".", 1)
-        return get_object_or_404(ContentType, app_label=app_name, model=model)
+        return ContentType.objects.get_by_natural_key(app_name, model)
 
     def get_queryset(self):
         ct = self.get_content_type()
@@ -87,6 +85,7 @@ class TimelineViewSet(ReadOnlyListViewSet):
                     event_type::text = ANY('{issues.issue.change,
                                              tasks.task.change,
                                              userstories.userstory.change,
+                                             epics.epic.change,
                                              wiki.wikipage.change}'::text[])
                 )
                 """])
@@ -94,6 +93,7 @@ class TimelineViewSet(ReadOnlyListViewSet):
             qs = qs.exclude(event_type__in=["issues.issue.delete",
                                             "tasks.task.delete",
                                             "userstories.userstory.delete",
+                                            "epics.epic.delete",
                                             "wiki.wikipage.delete",
                                             "projects.project.change"])
 

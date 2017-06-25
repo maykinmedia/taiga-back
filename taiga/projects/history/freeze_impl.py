@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -70,6 +70,7 @@ def _get_user_story_values(ids:set) -> dict:
 
 _get_us_status_values = partial(_get_generic_values, typename="projects.userstorystatus")
 _get_task_status_values = partial(_get_generic_values, typename="projects.taskstatus")
+_get_epic_status_values = partial(_get_generic_values, typename="projects.epicstatus")
 _get_issue_status_values = partial(_get_generic_values, typename="projects.issuestatus")
 _get_issue_type_values = partial(_get_generic_values, typename="projects.issuetype")
 _get_role_values = partial(_get_generic_values, typename="users.role")
@@ -102,6 +103,20 @@ def project_values(diff):
 
 
 def milestone_values(diff):
+    values = _common_users_values(diff)
+    return values
+
+
+def epic_values(diff):
+    values = _common_users_values(diff)
+
+    if "status" in diff:
+        values["status"] = _get_epic_status_values(diff["status"])
+
+    return values
+
+
+def epic_related_userstory_values(diff):
     values = _common_users_values(diff)
     return values
 
@@ -191,6 +206,19 @@ def extract_attachments(obj) -> list:
 
 
 @as_tuple
+def extract_epic_custom_attributes(obj) -> list:
+    with suppress(ObjectDoesNotExist):
+        custom_attributes_values = obj.custom_attributes_values.attributes_values
+        for attr in obj.project.epiccustomattributes.all():
+            with suppress(KeyError):
+                value = custom_attributes_values[str(attr.id)]
+                yield {"id": attr.id,
+                       "name": attr.name,
+                       "value": value,
+                       "type": attr.type}
+
+
+@as_tuple
 def extract_user_story_custom_attributes(obj) -> list:
     with suppress(ObjectDoesNotExist):
         custom_attributes_values =  obj.custom_attributes_values.attributes_values
@@ -199,7 +227,8 @@ def extract_user_story_custom_attributes(obj) -> list:
                 value = custom_attributes_values[str(attr.id)]
                 yield {"id": attr.id,
                        "name": attr.name,
-                       "value": value}
+                       "value": value,
+                       "type": attr.type}
 
 
 @as_tuple
@@ -211,7 +240,8 @@ def extract_task_custom_attributes(obj) -> list:
                 value = custom_attributes_values[str(attr.id)]
                 yield {"id": attr.id,
                        "name": attr.name,
-                       "value": value}
+                       "value": value,
+                       "type": attr.type}
 
 
 @as_tuple
@@ -223,7 +253,8 @@ def extract_issue_custom_attributes(obj) -> list:
                 value = custom_attributes_values[str(attr.id)]
                 yield {"id": attr.id,
                        "name": attr.name,
-                       "value": value}
+                       "value": value,
+                       "type": attr.type}
 
 
 def project_freezer(project) -> dict:
@@ -235,6 +266,7 @@ def project_freezer(project) -> dict:
               "total_milestones",
               "total_story_points",
               "tags",
+              "is_epics_activated",
               "is_backlog_activated",
               "is_kanban_activated",
               "is_wiki_activated",
@@ -251,6 +283,40 @@ def milestone_freezer(milestone) -> dict:
         "estimated_finish": milestone.estimated_finish,
         "closed": milestone.closed,
         "disponibility": milestone.disponibility
+    }
+
+    return snapshot
+
+
+def epic_freezer(epic) -> dict:
+    snapshot = {
+        "ref": epic.ref,
+        "color": epic.color,
+        "owner": epic.owner_id,
+        "status": epic.status.id if epic.status else None,
+        "epics_order": epic.epics_order,
+        "subject": epic.subject,
+        "description": epic.description,
+        "description_html": mdrender(epic.project, epic.description),
+        "assigned_to": epic.assigned_to_id,
+        "client_requirement": epic.client_requirement,
+        "team_requirement": epic.team_requirement,
+        "attachments": extract_attachments(epic),
+        "tags": epic.tags,
+        "is_blocked": epic.is_blocked,
+        "blocked_note": epic.blocked_note,
+        "blocked_note_html": mdrender(epic.project, epic.blocked_note),
+        "custom_attributes": extract_epic_custom_attributes(epic)
+    }
+
+    return snapshot
+
+
+def epic_related_userstory_freezer(related_us) -> dict:
+    snapshot = {
+        "user_story": related_us.user_story.id,
+        "epic": related_us.epic.id,
+        "order": related_us.order
     }
 
     return snapshot

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2016 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -23,6 +23,7 @@ from django.db import connection
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models.sql.datastructures import EmptyResultSet
 from taiga.base.api import serializers
+from taiga.base.fields import Field, MethodField
 
 Neighbor = namedtuple("Neighbor", "left right")
 
@@ -71,7 +72,6 @@ def get_neighbors(obj, results_set=None):
     if row is None:
         return Neighbor(None, None)
 
-    obj_position = row[1] - 1
     left_object_id = row[2]
     right_object_id = row[3]
 
@@ -88,13 +88,19 @@ def get_neighbors(obj, results_set=None):
     return Neighbor(left, right)
 
 
-class NeighborsSerializerMixin:
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["neighbors"] = serializers.SerializerMethodField("get_neighbors")
+class NeighborSerializer(serializers.LightSerializer):
+    id = Field()
+    ref = Field()
+    subject = Field()
+
+
+class NeighborsSerializerMixin(serializers.LightSerializer):
+    neighbors = MethodField()
 
     def serialize_neighbor(self, neighbor):
-        raise NotImplementedError
+        if neighbor:
+            return NeighborSerializer(neighbor).data
+        return None
 
     def get_neighbors(self, obj):
         view, request = self.context.get("view", None), self.context.get("request", None)

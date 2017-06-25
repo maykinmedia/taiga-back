@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2016 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -53,15 +53,18 @@ def attach_is_watcher_to_queryset(queryset, user, as_field="is_watcher"):
     """
     model = queryset.model
     type = apps.get_model("contenttypes", "ContentType").objects.get_for_model(model)
-    sql = ("""SELECT CASE WHEN (SELECT count(*)
-                                  FROM notifications_watched
-                                 WHERE notifications_watched.content_type_id = {type_id}
-                                   AND notifications_watched.object_id = {tbl}.id
-                                   AND notifications_watched.user_id = {user_id}) > 0
-                          THEN TRUE
-                          ELSE FALSE
-                     END""")
-    sql = sql.format(type_id=type.id, tbl=model._meta.db_table, user_id=user.id)
+    if user is None or user.is_anonymous():
+        sql = """SELECT false"""
+    else:
+        sql = ("""SELECT CASE WHEN (SELECT count(*)
+                                      FROM notifications_watched
+                                     WHERE notifications_watched.content_type_id = {type_id}
+                                       AND notifications_watched.object_id = {tbl}.id
+                                       AND notifications_watched.user_id = {user_id}) > 0
+                              THEN TRUE
+                              ELSE FALSE
+                         END""")
+        sql = sql.format(type_id=type.id, tbl=model._meta.db_table, user_id=user.id)
     qs = queryset.extra(select={as_field: sql})
     return qs
 

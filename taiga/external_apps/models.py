@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -40,8 +40,6 @@ class Application(models.Model):
 
     next_url = models.TextField(null=False, blank=False, verbose_name=_("Next url"))
 
-    key = models.TextField(null=False, blank=False, verbose_name=_("secret key for ciphering the application tokens"))
-
     class Meta:
         verbose_name = "application"
         verbose_name_plural = "applications"
@@ -70,10 +68,6 @@ class ApplicationToken(models.Model):
 
     def __str__(self):
         return "{application}: {user} - {token}".format(application=self.application.name, user=self.user.get_full_name(), token=self.token)
-
-    @property
-    def cyphered_token(self):
-        return services.cypher_token(self)
 
     @property
     def next_url(self):

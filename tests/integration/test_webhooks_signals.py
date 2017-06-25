@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2016 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -40,7 +40,7 @@ def test_new_object_with_one_webhook_signal(settings):
         f.WikiPageFactory.create(project=project)
     ]
 
-    response = Mock(status_code=200, headers={}, content="ok")
+    response = Mock(status_code=200, headers={}, text="ok")
     response.elapsed.total_seconds.return_value = 100
 
     for obj in objects:
@@ -77,7 +77,7 @@ def test_new_object_with_two_webhook_signals(settings):
         f.WikiPageFactory.create(project=project)
     ]
 
-    response = Mock(status_code=200, headers={}, content="ok")
+    response = Mock(status_code=200, headers={}, text="ok")
     response.elapsed.total_seconds.return_value = 100
 
     for obj in objects:
@@ -113,7 +113,7 @@ def test_send_request_one_webhook_signal(settings):
         f.WikiPageFactory.create(project=project)
     ]
 
-    response = Mock(status_code=200, headers={}, content="ok")
+    response = Mock(status_code=200, headers={}, text="ok")
     response.elapsed.total_seconds.return_value = 100
 
     for obj in objects:

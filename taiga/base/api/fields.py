@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -50,7 +50,6 @@ They are very similar to Django's form fields.
 from django import forms
 from django.conf import settings
 from django.core import validators
-from django.core.exceptions import ValidationError
 from django.db.models.fields import BLANK_CHOICE_DASH
 from django.forms import widgets
 from django.http import QueryDict
@@ -65,6 +64,8 @@ from django.utils.encoding import is_protected_type
 from django.utils.functional import Promise
 from django.utils.translation import ugettext
 from django.utils.translation import ugettext_lazy as _
+
+from taiga.base.exceptions import ValidationError
 
 from . import ISO_8601
 from .settings import api_settings
@@ -466,6 +467,11 @@ class ModelField(WritableField):
             "type": self.model_field.get_internal_type()
         }
 
+    def validate(self, value):
+        super(ModelField, self).validate(value)
+        if value is None and not self.model_field.null:
+            raise ValidationError(self.error_messages['invalid'])
+
 
 ##### Typed Fields #####
 
@@ -511,8 +517,9 @@ class CharField(WritableField):
             self.validators.append(validators.MaxLengthValidator(max_length))
 
     def from_native(self, value):
-        if isinstance(value, six.string_types) or value is None:
-            return value
+        if value in validators.EMPTY_VALUES:
+            return ""
+            
         return smart_text(value)
 
     def to_native(self, value):
@@ -611,6 +618,26 @@ class ChoiceField(WritableField):
         return value
 
 
+class InvalidEmailValidationError(ValidationError):
+    pass
+
+
+class InvalidDomainValidationError(ValidationError):
+    pass
+
+
+def validate_user_email_allowed_domains(value):
+    try:
+        validators.validate_email(value)
+    except ValidationError as e:
+        raise InvalidEmailValidationError(e)
+
+    domain_name = value.split("@")[1]
+
+    if settings.USER_EMAIL_ALLOWED_DOMAINS and domain_name not in settings.USER_EMAIL_ALLOWED_DOMAINS:
+        raise InvalidDomainValidationError(_("You email domain is not allowed"))
+
+
 class EmailField(CharField):
     type_name = "EmailField"
     type_label = "email"
@@ -619,7 +646,7 @@ class EmailField(CharField):
     default_error_messages = {
         "invalid": _("Enter a valid email address."),
     }
-    default_validators = [validators.validate_email]
+    default_validators = [validate_user_email_allowed_domains]
 
     def from_native(self, value):
         ret = super(EmailField, self).from_native(value)

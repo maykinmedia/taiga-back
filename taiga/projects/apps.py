@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -25,18 +25,16 @@ from django.db.models import signals
 
 def connect_projects_signals():
     from . import signals as handlers
+    from .tagging import signals as tagging_handlers
     # On project object is created apply template.
     signals.post_save.connect(handlers.project_post_save,
                               sender=apps.get_model("projects", "Project"),
                               dispatch_uid='project_post_save')
 
     # Tags normalization after save a project
-    signals.pre_save.connect(handlers.tags_normalization,
+    signals.pre_save.connect(tagging_handlers.tags_normalization,
                              sender=apps.get_model("projects", "Project"),
                              dispatch_uid="tags_normalization_projects")
-    signals.pre_save.connect(handlers.update_project_tags_when_create_or_edit_taggable_item,
-                             sender=apps.get_model("projects", "Project"),
-                             dispatch_uid="update_project_tags_when_create_or_edit_taggable_item_projects")
 
 
 def disconnect_projects_signals():
@@ -44,8 +42,6 @@ def disconnect_projects_signals():
                                  dispatch_uid='project_post_save')
     signals.pre_save.disconnect(sender=apps.get_model("projects", "Project"),
                                 dispatch_uid="tags_normalization_projects")
-    signals.pre_save.disconnect(sender=apps.get_model("projects", "Project"),
-                                dispatch_uid="update_project_tags_when_create_or_edit_taggable_item_projects")
 
 
 ## Memberships Signals
@@ -61,6 +57,7 @@ def connect_memberships_signals():
     signals.post_save.connect(handlers.create_notify_policy,
                               sender=apps.get_model("projects", "Membership"),
                               dispatch_uid='create-notify-policy')
+
 
 def disconnect_memberships_signals():
     signals.pre_delete.disconnect(sender=apps.get_model("projects", "Membership"),
@@ -83,7 +80,6 @@ def disconnect_us_status_signals():
                                  dispatch_uid="try_to_close_or_open_user_stories_when_edit_us_status")
 
 
-
 ## Tasks Statuses Signals
 
 def connect_task_status_signals():
@@ -96,7 +92,6 @@ def connect_task_status_signals():
 def disconnect_task_status_signals():
     signals.post_save.disconnect(sender=apps.get_model("projects", "TaskStatus"),
                                  dispatch_uid="try_to_close_or_open_user_stories_when_edit_task_status")
-
 
 
 class ProjectsAppConfig(AppConfig):

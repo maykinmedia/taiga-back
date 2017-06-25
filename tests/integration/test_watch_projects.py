@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2016 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -21,7 +21,7 @@ import pytest
 import json
 from django.core.urlresolvers import reverse
 
-from taiga.permissions.permissions import MEMBERS_PERMISSIONS, ANON_PERMISSIONS, USER_PERMISSIONS
+from taiga.permissions.choices import MEMBERS_PERMISSIONS, ANON_PERMISSIONS
 
 from .. import factories as f
 
@@ -130,7 +130,7 @@ def test_get_project_is_watcher(client):
     user = f.UserFactory.create()
     project = f.ProjectFactory.create(is_private=False,
             anon_permissions=list(map(lambda x: x[0], ANON_PERMISSIONS)),
-            public_permissions=list(map(lambda x: x[0], USER_PERMISSIONS)))
+            public_permissions=list(map(lambda x: x[0], ANON_PERMISSIONS)))
 
     url_detail = reverse("projects-detail", args=(project.id,))
     url_watch = reverse("projects-watch", args=(project.id,))

@@ -1,4 +1,22 @@
 # -*- coding: utf-8 -*-
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from django.core.urlresolvers import reverse
 from django.conf import settings
 from django.core.files import File
@@ -8,9 +26,14 @@ from django.core import signing
 from taiga.base.utils import json
 from taiga.projects.services import stats as stats_services
 from taiga.projects.history.services import take_snapshot
-from taiga.permissions.permissions import ANON_PERMISSIONS
+from taiga.permissions.choices import ANON_PERMISSIONS
 from taiga.projects.models import Project
+from taiga.projects.userstories.models import UserStory
+from taiga.projects.tasks.models import Task
+from taiga.projects.issues.models import Issue
+from taiga.projects.epics.models import Epic
 from taiga.projects.choices import BLOCKED_BY_DELETING
+from taiga.timeline.service import get_project_timeline
 
 from .. import factories as f
 from ..utils import DUMMY_BMP_DATA
@@ -23,7 +46,7 @@ import pytest
 
 from unittest import mock
 
-pytestmark = pytest.mark.django_db
+pytestmark = pytest.mark.django_db(transaction=True)
 
 class ExpiredSigner(signing.TimestampSigner):
     def __init__(self, *args, **kwargs):
@@ -604,7 +627,7 @@ def test_projects_user_order(client):
 
     #Testing user order
     url = reverse("projects-list")
-    url = "%s?member=%s&order_by=memberships__user_order" % (url, user.id)
+    url = "%s?member=%s&order_by=user_order" % (url, user.id)
     response = client.json.get(url)
     response_content = response.data
     assert response.status_code == 200
@@ -1838,11 +1861,10 @@ def test_delete_project_with_celery_enabled(client, settings):
         assert project.memberships.count() == 0
         assert project.blocked_code == BLOCKED_BY_DELETING
         delete_project_mock.delay.assert_called_once_with(project.id)
+    settings.CELERY_ENABLED = False
 
 
 def test_delete_project_with_celery_disabled(client, settings):
-    settings.CELERY_ENABLED = False
-
     user = f.UserFactory.create()
     project = f.ProjectFactory.create(owner=user)
     role = f.RoleFactory.create(project=project, permissions=["view_project"])
@@ -1852,3 +1874,403 @@ def test_delete_project_with_celery_disabled(client, settings):
     response = client.json.delete(url)
     assert response.status_code == 204
     assert Project.objects.filter(id=project.id).count() == 0
+
+
+def test_create_tag(client, settings):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user)
+    role = f.RoleFactory.create(project=project, permissions=["view_project"])
+    membership = f.MembershipFactory.create(project=project, user=user, role=role, is_admin=True)
+    url = reverse("projects-create-tag", args=(project.id,))
+    client.login(user)
+    data = {
+        "tag": "newtag",
+        "color": "#123123"
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    project = Project.objects.get(id=project.pk)
+    assert project.tags_colors == [["newtag", "#123123"]]
+
+
+def test_create_tag_without_color(client, settings):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user)
+    role = f.RoleFactory.create(project=project, permissions=["view_project"])
+    membership = f.MembershipFactory.create(project=project, user=user, role=role, is_admin=True)
+    url = reverse("projects-create-tag", args=(project.id,))
+    client.login(user)
+    data = {
+        "tag": "newtag",
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    project = Project.objects.get(id=project.pk)
+    assert project.tags_colors[0][0] == "newtag"
+
+
+def test_edit_tag_only_name(client, settings):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user, tags_colors=[("tag'1", "#123123")])
+    user_story = f.UserStoryFactory.create(project=project, tags=["tag'1"])
+    task = f.TaskFactory.create(project=project, tags=["tag'1"])
+    issue = f.IssueFactory.create(project=project, tags=["tag'1"])
+    epic = f.EpicFactory.create(project=project, tags=["tag'1"])
+
+    role = f.RoleFactory.create(project=project, permissions=["view_project"])
+    membership = f.MembershipFactory.create(project=project, user=user, role=role, is_admin=True)
+    url = reverse("projects-edit-tag", args=(project.id,))
+    client.login(user)
+    data = {
+        "from_tag": "tag'1",
+        "to_tag": "renamed_tag'1"
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+
+    assert response.status_code == 200
+    project = Project.objects.get(id=project.pk)
+    assert project.tags_colors == [["renamed_tag'1", "#123123"]]
+    user_story = UserStory.objects.get(id=user_story.pk)
+    assert user_story.tags == ["renamed_tag'1"]
+    task = Task.objects.get(id=task.pk)
+    assert task.tags == ["renamed_tag'1"]
+    issue = Issue.objects.get(id=issue.pk)
+    assert issue.tags == ["renamed_tag'1"]
+    epic = Epic.objects.get(id=epic.pk)
+    assert epic.tags == ["renamed_tag'1"]
+
+
+def test_edit_tag_only_color(client, settings):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user, tags_colors=[("tag", "#123123")])
+    user_story = f.UserStoryFactory.create(project=project, tags=["tag"])
+    task = f.TaskFactory.create(project=project, tags=["tag"])
+    issue = f.IssueFactory.create(project=project, tags=["tag"])
+    epic = f.EpicFactory.create(project=project, tags=["tag"])
+
+    role = f.RoleFactory.create(project=project, permissions=["view_project"])
+    membership = f.MembershipFactory.create(project=project, user=user, role=role, is_admin=True)
+    url = reverse("projects-edit-tag", args=(project.id,))
+    client.login(user)
+    data = {
+        "from_tag": "tag",
+        "color": "#AAABBB"
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    project = Project.objects.get(id=project.pk)
+    assert project.tags_colors == [["tag", "#AAABBB"]]
+    user_story = UserStory.objects.get(id=user_story.pk)
+    assert user_story.tags == ["tag"]
+    task = Task.objects.get(id=task.pk)
+    assert task.tags == ["tag"]
+    issue = Issue.objects.get(id=issue.pk)
+    assert issue.tags == ["tag"]
+    epic = Epic.objects.get(id=epic.pk)
+    assert epic.tags == ["tag"]
+
+
+def test_edit_tag(client, settings):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user, tags_colors=[("tag", "#123123")])
+    user_story = f.UserStoryFactory.create(project=project, tags=["tag"])
+    task = f.TaskFactory.create(project=project, tags=["tag"])
+    issue = f.IssueFactory.create(project=project, tags=["tag"])
+    epic = f.EpicFactory.create(project=project, tags=["tag"])
+
+    role = f.RoleFactory.create(project=project, permissions=["view_project"])
+    membership = f.MembershipFactory.create(project=project, user=user, role=role, is_admin=True)
+    url = reverse("projects-edit-tag", args=(project.id,))
+    client.login(user)
+    data = {
+        "from_tag": "tag",
+        "to_tag": "renamed_tag",
+        "color": "#AAABBB"
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    project = Project.objects.get(id=project.pk)
+    assert project.tags_colors == [["renamed_tag", "#AAABBB"]]
+    user_story = UserStory.objects.get(id=user_story.pk)
+    assert user_story.tags == ["renamed_tag"]
+    task = Task.objects.get(id=task.pk)
+    assert task.tags == ["renamed_tag"]
+    issue = Issue.objects.get(id=issue.pk)
+    assert issue.tags == ["renamed_tag"]
+    epic = Epic.objects.get(id=epic.pk)
+    assert epic.tags == ["renamed_tag"]
+
+
+def test_delete_tag(client, settings):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user, tags_colors=[("tag'1", "#123123")])
+    user_story = f.UserStoryFactory.create(project=project, tags=["tag'1"])
+    task = f.TaskFactory.create(project=project, tags=["tag'1"])
+    issue = f.IssueFactory.create(project=project, tags=["tag'1"])
+    epic = f.EpicFactory.create(project=project, tags=["tag'1"])
+
+    role = f.RoleFactory.create(project=project, permissions=["view_project"])
+    membership = f.MembershipFactory.create(project=project, user=user, role=role, is_admin=True)
+    url = reverse("projects-delete-tag", args=(project.id,))
+    client.login(user)
+    data = {
+        "tag": "tag'1"
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    project = Project.objects.get(id=project.pk)
+    assert project.tags_colors == []
+    user_story = UserStory.objects.get(id=user_story.pk)
+    assert user_story.tags == []
+    task = Task.objects.get(id=task.pk)
+    assert task.tags == []
+    issue = Issue.objects.get(id=issue.pk)
+    assert issue.tags == []
+    epic = Epic.objects.get(id=epic.pk)
+    assert epic.tags == []
+
+
+def test_mix_tags(client, settings):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user, tags_colors=[("tag'1", "#123123"), ("tag2", "#123123"), ("tag3", "#123123")])
+    user_story = f.UserStoryFactory.create(project=project, tags=["tag'1", "tag3"])
+    task = f.TaskFactory.create(project=project, tags=["tag2", "tag3"])
+    issue = f.IssueFactory.create(project=project, tags=["tag'1", "tag2", "tag3"])
+    epic = f.EpicFactory.create(project=project, tags=["tag'1", "tag2", "tag3"])
+
+    role = f.RoleFactory.create(project=project, permissions=["view_project"])
+    membership = f.MembershipFactory.create(project=project, user=user, role=role, is_admin=True)
+    url = reverse("projects-mix-tags", args=(project.id,))
+    client.login(user)
+    data = {
+        "from_tags": ["tag'1", "tag2"],
+        "to_tag": "tag2"
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    project = Project.objects.get(id=project.pk)
+    assert set(["tag2", "tag3"]) == set(dict(project.tags_colors).keys())
+    user_story = UserStory.objects.get(id=user_story.pk)
+    assert set(user_story.tags) == set(["tag2", "tag3"])
+    task = Task.objects.get(id=task.pk)
+    assert set(task.tags) == set(["tag2", "tag3"])
+    issue = Issue.objects.get(id=issue.pk)
+    assert set(issue.tags) == set(["tag2", "tag3"])
+    epic = Epic.objects.get(id=epic.pk)
+    assert set(epic.tags) == set(["tag2", "tag3"])
+
+
+def test_color_tags_project_fired_on_element_create():
+    user_story = f.UserStoryFactory.create(tags=["tag"])
+    project = Project.objects.get(id=user_story.project.id)
+    assert project.tags_colors == [["tag", None]]
+
+
+def test_color_tags_project_fired_on_element_update():
+    user_story = f.UserStoryFactory.create()
+    user_story.tags = ["tag"]
+    user_story.save()
+    project = Project.objects.get(id=user_story.project.id)
+    assert ["tag", None] in project.tags_colors
+
+
+def test_color_tags_project_fired_on_element_update_respecting_color():
+    project = f.ProjectFactory.create(tags_colors=[["tag", "#123123"]])
+    user_story = f.UserStoryFactory.create(project=project)
+    user_story.tags = ["tag"]
+    user_story.save()
+    project = Project.objects.get(id=user_story.project.id)
+    assert ["tag", "#123123"] in project.tags_colors
+
+
+def test_duplicate_project(client):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(
+        owner=user,
+        is_looking_for_people=True,
+        looking_for_people_note="Looking lookin",
+    )
+    project.tags = ["tag1", "tag2"]
+    project.tags_colors = [["t1", "#abcbca"], ["t2", "#aaabbb"]]
+
+    project.default_epic_status = f.EpicStatusFactory.create(project=project)
+    project.default_us_status = f.UserStoryStatusFactory.create(project=project)
+    project.default_task_status = f.TaskStatusFactory.create(project=project)
+    project.default_issue_status = f.IssueStatusFactory.create(project=project)
+    project.default_points = f.PointsFactory.create(project=project)
+    project.default_issue_type = f.IssueTypeFactory.create(project=project)
+    project.default_priority = f.PriorityFactory.create(project=project)
+    project.default_severity = f.SeverityFactory.create(project=project)
+
+    f.EpicCustomAttributeFactory(project=project)
+    f.UserStoryCustomAttributeFactory(project=project)
+    f.TaskCustomAttributeFactory(project=project)
+    f.IssueCustomAttributeFactory(project=project)
+
+    project.save()
+
+    role = f.RoleFactory.create(project=project, permissions=["view_project"])
+    f.MembershipFactory.create(project=project, user=user, role=role, is_admin=True)
+    extra_membership = f.MembershipFactory.create(project=project, is_admin=True, role__project=project)
+    membership = f.MembershipFactory.create(project=project, role=role)
+    url = reverse("projects-duplicate", args=(project.id,))
+
+    data = {
+        "name": "test",
+        "description": "description",
+        "is_private": True,
+        "users": [{
+            "id": extra_membership.user.id
+        }]
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 201
+
+    new_project = Project.objects.get(id=response.data["id"])
+
+    assert new_project.owner_id == user.id
+    owner_membership = new_project.memberships.get(user_id=user.id)
+    assert owner_membership.user_id == user.id
+    assert owner_membership.is_admin == True
+    assert project.memberships.get(user_id=extra_membership.user.id).role.slug == extra_membership.role.slug
+    assert set(project.tags) == set(new_project.tags)
+    assert set(dict(project.tags_colors).keys()) == set(dict(new_project.tags_colors).keys())
+
+    attributes = [
+        "is_epics_activated", "is_backlog_activated", "is_kanban_activated", "is_wiki_activated",
+        "is_issues_activated", "videoconferences", "videoconferences_extra_data",
+        "is_looking_for_people", "looking_for_people_note", "is_private"
+    ]
+
+    for attr in attributes:
+        assert getattr(project, attr) == getattr(new_project, attr)
+
+    fk_attributes = [
+        "default_epic_status", "default_us_status", "default_task_status", "default_issue_status",
+        "default_issue_type", "default_points", "default_priority", "default_severity",
+    ]
+
+    for attr in fk_attributes:
+        assert getattr(project, attr).name == getattr(new_project, attr).name
+
+    related_attributes = [
+        "epic_statuses", "us_statuses", "task_statuses","issue_statuses",
+        "issue_types", "points", "priorities", "severities",
+        "epiccustomattributes", "userstorycustomattributes", "taskcustomattributes", "issuecustomattributes",
+        "roles"
+    ]
+    for attr in related_attributes:
+        from_names = set(getattr(project, attr).all().values_list("name", flat=True))
+        to_names = set(getattr(new_project, attr).all().values_list("name", flat=True))
+        assert from_names == to_names
+
+    timeline = list(get_project_timeline(new_project))
+    assert len(timeline) == 2
+    assert timeline[0].event_type == "projects.project.create"
+    assert timeline[1].event_type == "projects.membership.create"
+
+
+def test_duplicate_private_project_without_enough_private_projects_slots(client):
+    user = f.UserFactory.create(max_private_projects=0)
+    project = f.ProjectFactory.create(owner=user)
+    f.MembershipFactory(user=user, project=project, is_admin=True)
+
+    url = reverse("projects-duplicate", args=(project.id,))
+    data = {
+        "name": "test",
+        "description": "description",
+        "is_private": True,
+        "users": []
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 400
+    assert "can't have more private projects" in response.data["_error_message"]
+    assert response["Taiga-Info-Project-Memberships"] == "1"
+    assert response["Taiga-Info-Project-Is-Private"] == "True"
+
+
+def test_duplicate_private_project_without_enough_memberships_slots(client):
+    user = f.UserFactory.create(max_memberships_private_projects=1)
+    project = f.ProjectFactory.create(owner=user)
+    f.MembershipFactory(user=user, project=project, is_admin=True, role__project=project)
+    extra_membership = f.MembershipFactory.create(project=project, is_admin=True, role__project=project)
+
+    url = reverse("projects-duplicate", args=(project.id,))
+    data = {
+        "name": "test",
+        "description": "description",
+        "is_private": True,
+        "users": [{
+            "id": extra_membership.user_id
+        }]
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 400
+    assert "current limit of memberships" in response.data["_error_message"]
+    assert response["Taiga-Info-Project-Memberships"] == "2"
+    assert response["Taiga-Info-Project-Is-Private"] == "True"
+
+
+def test_duplicate_public_project_without_enough_public_projects_slots(client):
+    user = f.UserFactory.create(max_public_projects=0)
+    project = f.ProjectFactory.create(owner=user)
+    f.MembershipFactory(user=user, project=project, is_admin=True)
+
+    url = reverse("projects-duplicate", args=(project.id,))
+    data = {
+        "name": "test",
+        "description": "description",
+        "is_private": False,
+        "users": []
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 400
+    assert "can't have more public projects" in response.data["_error_message"]
+    assert response["Taiga-Info-Project-Memberships"] == "1"
+    assert response["Taiga-Info-Project-Is-Private"] == "False"
+
+
+def test_duplicate_public_project_without_enough_memberships_slots(client):
+    user = f.UserFactory.create(max_memberships_public_projects=1)
+    project = f.ProjectFactory.create(owner=user)
+    f.MembershipFactory(user=user, project=project, is_admin=True, role__project=project)
+    extra_membership = f.MembershipFactory.create(project=project, is_admin=True, role__project=project)
+
+    url = reverse("projects-duplicate", args=(project.id,))
+    data = {
+        "name": "test",
+        "description": "description",
+        "is_private": False,
+        "users": [{
+            "id": extra_membership.user_id
+        }]
+    }
+
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 400
+    assert "current limit of memberships" in response.data["_error_message"]
+    assert response["Taiga-Info-Project-Memberships"] == "2"
+    assert response["Taiga-Info-Project-Is-Private"] == "False"

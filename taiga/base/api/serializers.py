@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -69,6 +69,7 @@ import copy
 import datetime
 import inspect
 import types
+import serpy
 
 # Note: We do the following so that users of the framework can use this style:
 #
@@ -76,6 +77,8 @@ import types
 #
 # This helps keep the separation between model fields, form fields, and
 # serializer fields more explicit.
+
+from taiga.base.exceptions import ValidationError
 
 from .relations import *
 from .fields import *
@@ -814,8 +817,18 @@ class ModelSerializer((six.with_metaclass(SerializerMetaclass, BaseSerializer)))
         else:
             # Reverse relationships are only included if they are explicitly
             # present in the `fields` option on the serializer
-            reverse_rels = opts.get_all_related_objects()
-            reverse_rels += opts.get_all_related_many_to_many_objects()
+
+            # NOTE: Rewrite after Django 1.10 upgrade.
+            #       See https://docs.djangoproject.com/es/1.10/ref/models/meta/#migrating-from-the-old-api
+            reverse_rels = [
+                f for f in opts.get_fields()
+                if (f.one_to_many or f.one_to_one)
+                and f.auto_created and not f.concrete
+            ]
+            reverse_rels += [
+                f for f in opts.get_fields(include_hidden=True)
+                if f.many_to_many and f.auto_created
+            ]
 
         for relation in reverse_rels:
             accessor_name = relation.get_accessor_name()
@@ -1021,16 +1034,32 @@ class ModelSerializer((six.with_metaclass(SerializerMetaclass, BaseSerializer)))
         m2m_data = {}
         related_data = {}
         nested_forward_relations = {}
+        model = self.opts.model
         meta = self.opts.model._meta
 
         # Reverse fk or one-to-one relations
-        for (obj, model) in meta.get_all_related_objects_with_model():
+        # NOTE: Rewrite after Django 1.10 upgrade.
+        #       See https://docs.djangoproject.com/es/1.10/ref/models/meta/#migrating-from-the-old-api
+        related_objes_with_models = [
+            (f, f.model if f.model != model else None)
+            for f in meta.get_fields()
+            if (f.one_to_many or f.one_to_one)
+            and f.auto_created and not f.concrete
+        ]
+        for (obj, model) in related_objes_with_models:
             field_name = obj.get_accessor_name()
             if field_name in attrs:
                 related_data[field_name] = attrs.pop(field_name)
 
         # Reverse m2m relations
-        for (obj, model) in meta.get_all_related_m2m_objects_with_model():
+        # NOTE: Rewrite after Django 1.10 upgrade.
+        #       See https://docs.djangoproject.com/es/1.10/ref/models/meta/#migrating-from-the-old-api
+        related_m2m_objects_with_model = [
+            (f, f.model if f.model != model else None)
+            for f in meta.get_fields(include_hidden=True)
+            if f.many_to_many and f.auto_created
+        ]
+        for (obj, model) in related_m2m_objects_with_model:
             field_name = obj.get_accessor_name()
             if field_name in attrs:
                 m2m_data[field_name] = attrs.pop(field_name)
@@ -1220,3 +1249,27 @@ class HyperlinkedModelSerializer(ModelSerializer):
             "model_name": model_meta.object_name.lower()
         }
         return self._default_view_name % format_kwargs
+
+
+class LightSerializer(serpy.Serializer):
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("read_only", None)
+        kwargs.pop("partial", None)
+        kwargs.pop("files", None)
+        context = kwargs.pop("context", {})
+        view = kwargs.pop("view", {})
+        super().__init__(*args, **kwargs)
+        self.context = context
+        self.view = view
+
+
+class LightDictSerializer(serpy.DictSerializer):
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("read_only", None)
+        kwargs.pop("partial", None)
+        kwargs.pop("files", None)
+        context = kwargs.pop("context", {})
+        view = kwargs.pop("view", {})
+        super().__init__(*args, **kwargs)
+        self.context = context
+        self.view = view

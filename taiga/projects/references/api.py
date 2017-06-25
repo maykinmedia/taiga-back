@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -22,9 +22,9 @@ from taiga.base import exceptions as exc
 from taiga.base import response
 from taiga.base.api import viewsets
 from taiga.base.api.utils import get_object_or_404
-from taiga.permissions.service import user_has_perm
+from taiga.permissions.services import user_has_perm
 
-from .serializers import ResolverSerializer
+from .validators import ResolverValidator
 from . import permissions
 
 
@@ -32,11 +32,11 @@ class ResolverViewSet(viewsets.ViewSet):
     permission_classes = (permissions.ResolverPermission,)
 
     def list(self, request, **kwargs):
-        serializer = ResolverSerializer(data=request.QUERY_PARAMS)
-        if not serializer.is_valid():
-            raise exc.BadRequest(serializer.errors)
+        validator = ResolverValidator(data=request.QUERY_PARAMS)
+        if not validator.is_valid():
+            raise exc.BadRequest(validator.errors)
 
-        data = serializer.data
+        data = validator.data
 
         project_model = apps.get_model("projects", "Project")
         project = get_object_or_404(project_model, slug=data["project"])
@@ -45,6 +45,9 @@ class ResolverViewSet(viewsets.ViewSet):
 
         result = {"project": project.pk}
 
+        if data["epic"] and user_has_perm(request.user, "view_epics", project):
+            result["epic"] = get_object_or_404(project.epics.all(),
+                                               ref=data["epic"]).pk
         if data["us"] and user_has_perm(request.user, "view_us", project):
             result["us"] = get_object_or_404(project.user_stories.all(),
                                              ref=data["us"]).pk
@@ -63,19 +66,34 @@ class ResolverViewSet(viewsets.ViewSet):
 
         if data["ref"]:
             ref_found = False  # No need to continue once one ref is found
-            if user_has_perm(request.user, "view_us", project):
-                us = project.user_stories.filter(ref=data["ref"]).first()
-                if us:
-                    result["us"] = us.pk
-                    ref_found = True
-            if ref_found is False and user_has_perm(request.user, "view_tasks", project):
-                task = project.tasks.filter(ref=data["ref"]).first()
-                if task:
-                    result["task"] = task.pk
-                    ref_found = True
-            if ref_found is False and user_has_perm(request.user, "view_issues", project):
-                issue = project.issues.filter(ref=data["ref"]).first()
-                if issue:
-                    result["issue"] = issue.pk
+            try:
+                value = int(data["ref"])
+
+                if user_has_perm(request.user, "view_epics", project):
+                    epic = project.epics.filter(ref=value).first()
+                    if epic:
+                        result["epic"] = epic.pk
+                        ref_found = True
+                if ref_found is False and user_has_perm(request.user, "view_us", project):
+                    us = project.user_stories.filter(ref=value).first()
+                    if us:
+                        result["us"] = us.pk
+                        ref_found = True
+                if ref_found is False and user_has_perm(request.user, "view_tasks", project):
+                    task = project.tasks.filter(ref=value).first()
+                    if task:
+                        result["task"] = task.pk
+                        ref_found = True
+                if ref_found is False and user_has_perm(request.user, "view_issues", project):
+                    issue = project.issues.filter(ref=value).first()
+                    if issue:
+                        result["issue"] = issue.pk
+            except:
+                value = data["ref"]
+
+                if user_has_perm(request.user, "view_wiki_pages", project):
+                    wiki_page = project.wiki_pages.filter(slug=value).first()
+                    if wiki_page:
+                        result["wikipage"] = wiki_page.pk
 
         return response.Ok(result)

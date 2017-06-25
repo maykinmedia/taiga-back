@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2016 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -48,7 +48,7 @@ def attach_total_voters_to_queryset(queryset, as_field="total_voters"):
     return qs
 
 
-def attach_is_voter_to_queryset(user, queryset, as_field="is_voter"):
+def attach_is_voter_to_queryset(queryset, user, as_field="is_voter"):
     """Attach is_vote boolean to each object of the queryset.
 
     Because of laziness of vote objects creation, this makes much simpler and more efficient to
@@ -57,22 +57,26 @@ def attach_is_voter_to_queryset(user, queryset, as_field="is_voter"):
     (The other way was to do it in the serializer with some try/except blocks and additional
     queries)
 
-    :param user: A users.User object model
     :param queryset: A Django queryset object.
+    :param user: A users.User object model
     :param as_field: Attach the boolean as an attribute with this name.
 
     :return: Queryset object with the additional `as_field` field.
     """
     model = queryset.model
     type = apps.get_model("contenttypes", "ContentType").objects.get_for_model(model)
-    sql = ("""SELECT CASE WHEN (SELECT count(*)
-                                  FROM votes_vote
-                                 WHERE votes_vote.content_type_id = {type_id}
-                                   AND votes_vote.object_id = {tbl}.id
-                                   AND votes_vote.user_id = {user_id}) > 0
-                          THEN TRUE
-                          ELSE FALSE
-                     END""")
-    sql = sql.format(type_id=type.id, tbl=model._meta.db_table, user_id=user.id)
+    if user is None or user.is_anonymous():
+        sql = """SELECT false"""
+    else:
+        sql = ("""SELECT CASE WHEN (SELECT count(*)
+                                      FROM votes_vote
+                                     WHERE votes_vote.content_type_id = {type_id}
+                                       AND votes_vote.object_id = {tbl}.id
+                                       AND votes_vote.user_id = {user_id}) > 0
+                              THEN TRUE
+                              ELSE FALSE
+                         END""")
+        sql = sql.format(type_id=type.id, tbl=model._meta.db_table, user_id=user.id)
+
     qs = queryset.extra(select={as_field: sql})
     return qs

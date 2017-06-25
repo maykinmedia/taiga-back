@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -48,7 +48,7 @@ Serializer fields that deal with relationships.
 These fields allow you to specify the style that should be used to represent
 model relationships, including hyperlinks, primary keys, or slugs.
 """
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.urlresolvers import resolve, get_script_prefix, NoReverseMatch
 from django import forms
 from django.db.models.fields import BLANK_CHOICE_DASH
@@ -59,6 +59,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from .fields import Field, WritableField, get_component, is_simple_callable
 from .reverse import reverse
+from taiga.base.exceptions import ValidationError
 
 import warnings
 from urllib import parse as urlparse

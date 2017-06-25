@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -21,10 +21,11 @@ from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 
+from taiga.projects.models import Project
+from taiga.projects.epics.models import Epic
 from taiga.projects.userstories.models import UserStory
 from taiga.projects.tasks.models import Task
 from taiga.projects.issues.models import Issue
-from taiga.projects.models import Project
 
 from . import sequences as seq
 
@@ -67,6 +68,19 @@ def make_reference(instance, project, create=False):
     return refval, refinstance
 
 
+def recalc_reference_counter(project):
+    seqname = make_sequence_name(project)
+    max_ref_us = project.user_stories.all().aggregate(max=models.Max('ref'))
+    max_ref_task = project.tasks.all().aggregate(max=models.Max('ref'))
+    max_ref_issue = project.issues.all().aggregate(max=models.Max('ref'))
+    max_references = list(filter(lambda x: x is not None, [max_ref_us['max'], max_ref_task['max'], max_ref_issue['max']]))
+
+    max_value = 0
+    if len(max_references) > 0:
+        max_value = max(max_references)
+    seq.set_max(seqname, max_value)
+
+
 def create_sequence(sender, instance, created, **kwargs):
     if not created:
         return
@@ -103,11 +117,22 @@ def attach_sequence(sender, instance, created, **kwargs):
             instance.save(update_fields=['ref'])
 
 
+# Project
 models.signals.post_save.connect(create_sequence, sender=Project, dispatch_uid="refproj")
-models.signals.pre_save.connect(store_previous_project, sender=UserStory, dispatch_uid="refus")
-models.signals.pre_save.connect(store_previous_project, sender=Issue, dispatch_uid="refissue")
-models.signals.pre_save.connect(store_previous_project, sender=Task, dispatch_uid="reftask")
-models.signals.post_save.connect(attach_sequence, sender=UserStory, dispatch_uid="refus")
-models.signals.post_save.connect(attach_sequence, sender=Issue, dispatch_uid="refissue")
-models.signals.post_save.connect(attach_sequence, sender=Task, dispatch_uid="reftask")
 models.signals.post_delete.connect(delete_sequence, sender=Project, dispatch_uid="refprojdel")
+
+# Epic
+models.signals.pre_save.connect(store_previous_project, sender=Epic, dispatch_uid="refepic")
+models.signals.post_save.connect(attach_sequence, sender=Epic, dispatch_uid="refepic")
+
+# User Story
+models.signals.pre_save.connect(store_previous_project, sender=UserStory, dispatch_uid="refus")
+models.signals.post_save.connect(attach_sequence, sender=UserStory, dispatch_uid="refus")
+
+# Task
+models.signals.pre_save.connect(store_previous_project, sender=Task, dispatch_uid="reftask")
+models.signals.post_save.connect(attach_sequence, sender=Task, dispatch_uid="reftask")
+
+# Issue
+models.signals.pre_save.connect(store_previous_project, sender=Issue, dispatch_uid="refissue")
+models.signals.post_save.connect(attach_sequence, sender=Issue, dispatch_uid="refissue")

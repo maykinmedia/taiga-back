@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -59,8 +59,9 @@ def update_role_points_when_create_or_edit_us(sender, instance, **kwargs):
 
 def update_milestone_of_tasks_when_edit_us(sender, instance, created, **kwargs):
     if not created:
-        instance.tasks.update(milestone=instance.milestone)
-        for task in instance.tasks.all():
+        tasks = instance.tasks.exclude(milestone=instance.milestone)
+        tasks.update(milestone=instance.milestone)
+        for task in tasks:
             take_snapshot(task)
 
 

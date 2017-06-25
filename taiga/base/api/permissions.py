@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -20,11 +20,11 @@ import abc
 
 from functools import reduce
 
-from taiga.base.utils import sequence as sq
-from taiga.permissions.service import user_has_perm, is_project_admin
+from taiga.permissions.services import user_has_perm, is_project_admin
 from django.apps import apps
 
 from django.utils.translation import ugettext as _
+
 
 ######################################################################
 # Base permissiones definition
@@ -111,7 +111,7 @@ class Not(PermissionOperator):
         super().__init__(component)
 
     def check_permissions(self, *args, **kwargs):
-        component = sq.first(self.components)
+        component = self.components[0]
         return (not component.check_permissions(*args, **kwargs))
 
 
@@ -180,33 +180,6 @@ class HasProjectPerm(PermissionComponent):
         return user_has_perm(request.user, self.project_perm, obj)
 
 
-class HasProjectParamAndPerm(PermissionComponent):
-    def __init__(self, perm, *components):
-        self.project_perm = perm
-        super().__init__(*components)
-
-    def check_permissions(self, request, view, obj=None):
-        Project = apps.get_model('projects', 'Project')
-        project_id = request.QUERY_PARAMS.get("project", None)
-        try:
-            project = Project.objects.get(pk=project_id)
-        except Project.DoesNotExist:
-            return False
-        return user_has_perm(request.user, self.project_perm, project)
-
-
-class HasMandatoryParam(PermissionComponent):
-    def __init__(self, param, *components):
-        self.mandatory_param = param
-        super().__init__(*components)
-
-    def check_permissions(self, request, view, obj=None):
-        param = request.GET.get(self.mandatory_param, None)
-        if param:
-            return True
-        return False
-
-
 class IsProjectAdmin(PermissionComponent):
     def check_permissions(self, request, view, obj=None):
         return is_project_admin(request.user, obj)
@@ -214,6 +187,9 @@ class IsProjectAdmin(PermissionComponent):
 
 class IsObjectOwner(PermissionComponent):
     def check_permissions(self, request, view, obj=None):
+        if obj.owner is None:
+            return False
+
         return obj.owner == request.user
 
 

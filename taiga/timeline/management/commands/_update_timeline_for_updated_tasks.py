@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -40,7 +40,9 @@ def update_timeline(initial_date, final_date):
 
     print("Generating tasks indexed by id dict")
     task_ids = timelines.values_list("object_id", flat=True)
-    tasks_per_id = {task.id: task for task in Task.objects.filter(id__in=task_ids).select_related("user_story").iterator()}
+
+    tasks_iterator = Task.objects.filter(id__in=task_ids).select_related("user_story").iterator()
+    tasks_per_id = {task.id: task for task in tasks_iterator}
     del task_ids
 
     counter = 1

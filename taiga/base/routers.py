@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -20,7 +20,7 @@
 
 import itertools
 from collections import namedtuple
-from django.conf.urls import patterns, url
+from django.conf.urls import url
 from django.core.exceptions import ImproperlyConfigured
 from django.core.urlresolvers import NoReverseMatch
 
@@ -79,7 +79,7 @@ class BaseRouter(object):
     @property
     def urls(self):
         if not hasattr(self, '_urls'):
-            self._urls = patterns('', *self.get_urls())
+            self._urls = self.get_urls()
         return self._urls
 
 
@@ -318,7 +318,58 @@ class DRFDefaultRouter(SimpleRouter):
         return urls
 
 
-class DefaultRouter(DRFDefaultRouter):
+class NestedRegistryItem(object):
+    def __init__(self, router, parent_prefix, parent_item=None):
+        self.router = router
+        self.parent_prefix = parent_prefix
+        self.parent_item = parent_item
+
+    def register(self, prefix, viewset, base_name, parents_query_lookups):
+        self.router._register(
+            prefix=self.get_prefix(current_prefix=prefix, parents_query_lookups=parents_query_lookups),
+            viewset=viewset,
+            base_name=base_name,
+        )
+        return NestedRegistryItem(
+            router=self.router,
+            parent_prefix=prefix,
+            parent_item=self
+        )
+
+    def get_prefix(self, current_prefix, parents_query_lookups):
+        return "{0}/{1}".format(
+            self.get_parent_prefix(parents_query_lookups),
+            current_prefix
+        )
+
+    def get_parent_prefix(self, parents_query_lookups):
+        prefix = "/"
+        current_item = self
+        i = len(parents_query_lookups) - 1
+        while current_item:
+            prefix = "{parent_prefix}/(?P<{parent_pk_kwarg_name}>[^/.]+)/{prefix}".format(
+                parent_prefix=current_item.parent_prefix,
+                parent_pk_kwarg_name=parents_query_lookups[i],
+                prefix=prefix
+            )
+            i -= 1
+            current_item = current_item.parent_item
+        return prefix.strip("/")
+
+
+class NestedRouterMixin:
+    def _register(self, *args, **kwargs):
+        return super().register(*args, **kwargs)
+
+    def register(self, *args, **kwargs):
+        self._register(*args, **kwargs)
+        return NestedRegistryItem(
+            router=self,
+            parent_prefix=self.registry[-1][0]
+        )
+
+
+class DefaultRouter(NestedRouterMixin, DRFDefaultRouter):
     pass
 
 __all__ = ["DefaultRouter"]

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -18,7 +18,7 @@
 
 from django.utils.translation import ugettext as _
 
-from taiga.base.api import serializers
+from taiga.base.exceptions import ValidationError
 
 
 class WatchersValidator:
@@ -45,6 +45,6 @@ class WatchersValidator:
         existing_watcher_ids = project.get_watchers().values_list("id", flat=True)
         result = set(users).difference(member_ids).difference(existing_watcher_ids)
         if result:
-            raise serializers.ValidationError(_("Watchers contains invalid users"))
+            raise ValidationError(_("Watchers contains invalid users"))
 
         return attrs

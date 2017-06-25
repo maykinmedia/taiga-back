@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -38,6 +38,7 @@ def cached_prev_task(sender, instance, **kwargs):
 def try_to_close_or_open_us_and_milestone_when_create_or_edit_task(sender, instance, created, **kwargs):
     _try_to_close_or_open_us_when_create_or_edit_task(instance)
     _try_to_close_or_open_milestone_when_create_or_edit_task(instance)
+
 
 def try_to_close_or_open_us_and_milestone_when_delete_task(sender, instance, **kwargs):
     _try_to_close_or_open_us_when_delete_task(instance)
@@ -95,6 +96,7 @@ def _try_to_close_milestone_when_delete_task(instance):
     with suppress(ObjectDoesNotExist):
         if instance.milestone_id and services.calculate_milestone_is_closed(instance.milestone):
             services.close_milestone(instance.milestone)
+
 
 ####################################
 # Signals for set finished date

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -16,9 +16,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from taiga.base.api.permissions import (TaigaResourcePermission, HasProjectPerm,
-                                        IsAuthenticated, IsProjectAdmin, AllowAny,
-                                        IsSuperUser)
+from taiga.base.api.permissions import TaigaResourcePermission, AllowAny, IsAuthenticated, IsSuperUser
+from taiga.permissions.permissions import HasProjectPerm, IsProjectAdmin
+
+from taiga.permissions.permissions import CommentAndOrUpdatePerm
 
 
 class TaskPermission(TaigaResourcePermission):
@@ -26,10 +27,11 @@ class TaskPermission(TaigaResourcePermission):
     global_perms = None
     retrieve_perms = HasProjectPerm('view_tasks')
     create_perms = HasProjectPerm('add_task')
-    update_perms = HasProjectPerm('modify_task')
-    partial_update_perms = HasProjectPerm('modify_task')
+    update_perms = CommentAndOrUpdatePerm('modify_task', 'comment_task')
+    partial_update_perms = CommentAndOrUpdatePerm('modify_task', 'comment_task')
     destroy_perms = HasProjectPerm('delete_task')
     list_perms = AllowAny()
+    filters_data_perms = AllowAny()
     csv_perms = AllowAny()
     bulk_create_perms = HasProjectPerm('add_task')
     bulk_update_order_perms = HasProjectPerm('modify_task')

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -49,6 +49,34 @@ class ProjectsSitemap(Sitemap):
 
     def priority(self, obj):
         return 0.9
+
+
+class ProjectEpicsSitemap(Sitemap):
+    def items(self):
+        project_model = apps.get_model("projects", "Project")
+
+        # Get public projects OR private projects if anon user can view them and epics
+        queryset = project_model.objects.filter(Q(is_private=False) |
+                                                Q(is_private=True,
+                                                  anon_permissions__contains=["view_project",
+                                                                              "view_epics"]))
+
+        # Exclude projects without epics enabled
+        queryset = queryset.exclude(is_epics_activated=False)
+
+        return queryset
+
+    def location(self, obj):
+        return resolve("epics", obj.slug)
+
+    def lastmod(self, obj):
+        return obj.modified_date
+
+    def changefreq(self, obj):
+        return "daily"
+
+    def priority(self, obj):
+        return 0.6
 
 
 class ProjectBacklogsSitemap(Sitemap):

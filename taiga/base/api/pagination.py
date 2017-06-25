@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2016 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2016 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2016 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2016 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
+# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
+# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
+# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -24,12 +24,26 @@ from django.core.paginator import (
     InvalidPage,
 )
 from django.http import Http404
+from django.http import QueryDict
 from django.utils.translation import ugettext as _
 
 from .settings import api_settings
-from .templatetags.api import replace_query_param
+
+from urllib import parse as urlparse
 
 import warnings
+
+
+def replace_query_param(url, key, val):
+    """
+    Given a URL and a key/val pair, set or replace an item in the query
+    parameters of the URL, and return the new URL.
+    """
+    (scheme, netloc, path, query, fragment) = urlparse.urlsplit(url)
+    query_dict = QueryDict(query).copy()
+    query_dict[key] = val
+    query = query_dict.urlencode()
+    return urlparse.urlunsplit((scheme, netloc, path, query, fragment))
 
 
 def strict_positive_int(integer_string, cutoff=None):
