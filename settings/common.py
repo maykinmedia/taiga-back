@@ -354,6 +354,14 @@ LOGGING = {
             "class":"logging.StreamHandler",
             "formatter": "simple",
         },
+        'project': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': '/tmp/taiga-back.log',
+            'formatter': 'complete',
+            'maxBytes': 1024*1024*10,  # 10 MB
+            'backupCount': 10
+        },
         "mail_admins": {
             "level": "ERROR",
             "filters": ["require_debug_false"],
@@ -362,7 +370,7 @@ LOGGING = {
     },
     "loggers": {
         "django": {
-            "handlers":["null"],
+            "handlers":["project"],
             "propagate": True,
             "level":"INFO",
         },
@@ -377,7 +385,7 @@ LOGGING = {
             "propagate": False,
         },
         "taiga": {
-            "handlers": ["console"],
+            "handlers": ["project", "console"],
             "level": "DEBUG",
             "propagate": False,
         }
