@@ -1,0 +1,14 @@
+{% extends "emails/base-body-html.jinja" %}
+
+{% block body %}
+    <h1>The following issues have been changed</h1>
+    {% for project, issues, url in projects %}
+      <h2>{{ project }}</h2>
+      <ul>
+      {% for issue in issues %}
+      <li>{{ issue }} <a class="button" href="{{ url }}/{{ issue.ref }}/" title="See Issue #{{ ref }} {{ subject }}">See issue</a></li>
+      {% endfor %}
+      </ul>
+    {% endfor %}
+    <p><small>The Taiga Team</small></p>
+{% endblock %}
