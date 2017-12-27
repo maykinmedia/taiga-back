@@ -21,6 +21,7 @@ import datetime
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.conf import settings
+from django.db.models import Count
 
 from taiga.base.utils.urls import get_absolute_url
 from taiga.projects.models import Project, Membership
@@ -43,11 +44,18 @@ class Command(BaseCommand):
         issues = Issue.objects.filter(modified_date__gte=time_diff,
                                       status__is_closed=False)
         projects = Project.objects.filter(issues__in=issues).distinct()
-        context = {'projects': []}
+
+        projects_with_issues = []
         for project in projects:
             url = get_absolute_url('/project/{}/issue'.format(project.slug))
-            context['projects'] += [(project, issues.filter(project=project).distinct(), url)]
-
+            project_issues = issues.filter(project=project).distinct()
+            nr_issues = project_issues.count()
+            projects_with_issues += [(project, project_issues, url, nr_issues)]
+        projects_with_issues = sorted(projects_with_issues, key=lambda project: project[3], reverse=True)
+        
+        context = {'projects': projects_with_issues,
+                   'summary': "".join([u"- {}: {} ".format(p[0], p[3]) for p in projects_with_issues])}
+        
         email = _make_template_mail('issues/issues-list')
 
         msg_id = 'taiga-system'
@@ -74,5 +82,5 @@ class Command(BaseCommand):
             email.send(user.email, context, headers=headers)
     
     def handle(self, *args, **options):
-        superusers = User.objects.filter(is_superuser=True, is_active=True, biography__icontains='notify issues')
+        superusers = User.objects.filter(is_superuser=True, is_active=True, bio__icontains='notify issues')
         self.send_issue_notification(superusers)
