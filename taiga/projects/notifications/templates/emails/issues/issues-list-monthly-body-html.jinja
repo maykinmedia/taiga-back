@@ -1,7 +1,15 @@
 {% extends "emails/base-body-html.jinja" %}
 
 {% block body %}
-    <h1>The following open issues have had activity in the past 24 hours</h1>
+    <h1>The following issues are open</h1>
+    <p>
+    Summary:
+    <ul>
+    {% for project, issues, url, nr_issues in projects %}
+        <li>{{ project }}: {{ nr_issues }}</li>
+    {% endfor %}
+    </ul>
+    
     {% for project, issues, url, nr_issues in projects %}
       <strong>{{ project }}: {{ nr_issues }}</strong>
       <ul>

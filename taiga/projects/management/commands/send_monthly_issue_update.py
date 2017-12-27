@@ -39,11 +39,8 @@ class Command(BaseCommand):
         from taiga.projects.notifications.services import _make_template_mail, make_ms_thread_index
         domain = settings.SITES["api"]["domain"].split(":")[0] or settings.SITES["api"]["domain"]
 
-        now = timezone.now()
-        time_diff = now - datetime.timedelta(seconds=NOTIFY_ISSUES_TO_SU_INTERVAL)
-        issues = Issue.objects.filter(modified_date__gte=time_diff,
-                                      status__is_closed=False)
-        projects = Project.objects.filter(issues__in=issues).distinct()
+        issues = Issue.objects.filter(status__is_closed=False)
+        projects = Project.objects.filter(issues__in=issues, blocked_code__isnull=True).distinct()
 
         projects_with_issues = []
         for project in projects:
@@ -56,7 +53,7 @@ class Command(BaseCommand):
         context = {'projects': projects_with_issues,
                    'summary': "".join([u"- {}: {} ".format(p[0], p[3]) for p in projects_with_issues])}
         
-        email = _make_template_mail('issues/issues-list')
+        email = _make_template_mail('issues/issues-list-monthly')
 
         msg_id = 'taiga-system'
         now = datetime.datetime.now()
