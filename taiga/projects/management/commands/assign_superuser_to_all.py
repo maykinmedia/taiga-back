@@ -28,5 +28,9 @@ class Command(BaseCommand):
         for user in superusers:
             projects = Project.objects.exclude(memberships__user=user).filter(blocked_code=None)
             for project in projects:
-                Membership.objects.create(user=user, project=project, is_admin=True,
-                                          role=project.roles.all().last())
+                try:
+                    Membership.objects.create(user=user, project=project, is_admin=True,
+                                              role=project.roles.all().last())
+                except:
+                    pass
+                
