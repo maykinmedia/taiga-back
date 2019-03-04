@@ -47,11 +47,22 @@ class Command(BaseCommand):
             url = get_absolute_url('/project/{}/issue'.format(project.slug))
             project_issues = issues.filter(project=project).distinct()
             nr_issues = project_issues.count()
-            projects_with_issues += [(project, project_issues, url, nr_issues)]
-        projects_with_issues = sorted(projects_with_issues, key=lambda project: project[3], reverse=True)
-        
+            issue_types = []
+            nr_bugs = 0
+            for issue_type in project.issue_types.all():
+                nr = project_issues.filter(type=issue_type).count()
+                if nr:
+                    if issue_type.name == 'Bug':
+                        nr_bugs = nr
+                    issue_types += [{'nr': nr,
+                                     'name': issue_type.name,
+                                     'color': issue_type.color}]
+            projects_with_issues += [{'project': project, 'issues': project_issues, 'nr_bugs': nr_bugs,
+                                      'url': url, 'nr_issues': nr_issues, 'issue_types': issue_types}]
+        projects_with_issues = sorted(projects_with_issues,
+                                      key=lambda project: project['nr_bugs'], reverse=True)
         context = {'projects': projects_with_issues,
-                   'summary': "".join([u"- {}: {} ".format(p[0], p[3]) for p in projects_with_issues])}
+                   'summary': "".join([u"- {}: {} ".format(p['project'], p['nr_bugs']) for p in projects_with_issues])}
         
         email = _make_template_mail('issues/issues-list-monthly')
 

@@ -21,7 +21,8 @@ requests-oauthlib==0.8.0
 webcolors==1.7
 django-sr==0.0.4
 easy-thumbnails==2.3
-celery==4.0.2
+celery==4.2.1
+kombu==4.2.1
 redis==2.10.5
 Unidecode==0.4.20
 raven==6.0.0
@@ -38,6 +39,6 @@ serpy==0.1.1
 psd-tools==1.4
 CairoSVG==2.0.1
 python-magic==0.4.13
-cryptography==1.9
+cryptography==2.4.2
 PyJWT==1.4.2
 asana==0.6.2
