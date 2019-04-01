@@ -19,15 +19,17 @@
 from django.utils.translation import ugettext as _
 
 from taiga.base.exceptions import ValidationError
+from taiga.base.api import serializers
 from taiga.base.api import validators
-from taiga.projects.validators import DuplicatedNameInProjectValidator
 from taiga.projects.notifications.validators import WatchersValidator
-
+from taiga.projects.userstories.models import UserStory
+from taiga.projects.validators import DuplicatedNameInProjectValidator
+from taiga.projects.validators import ProjectExistsValidator
 from . import models
 
 
 class MilestoneExistsValidator:
-    def validate_sprint_id(self, attrs, source):
+    def validate_milestone_id(self, attrs, source):
         value = attrs[source]
         if not models.Milestone.objects.filter(pk=value).exists():
             msg = _("There's no milestone with that id")
@@ -39,3 +41,28 @@ class MilestoneValidator(WatchersValidator, DuplicatedNameInProjectValidator, va
     class Meta:
         model = models.Milestone
         read_only_fields = ("id", "created_date", "modified_date")
+
+
+# bulk validators
+class _UserStoryMilestoneBulkValidator(validators.Validator):
+    us_id = serializers.IntegerField()
+    order = serializers.IntegerField()
+
+
+class UpdateMilestoneBulkValidator(MilestoneExistsValidator,
+                                   ProjectExistsValidator,
+                                   validators.Validator):
+    project_id = serializers.IntegerField()
+    milestone_id = serializers.IntegerField()
+    bulk_stories = _UserStoryMilestoneBulkValidator(many=True)
+
+    def validate_bulk_stories(self, attrs, source):
+        filters = {
+            "project__id": attrs["project_id"],
+            "id__in": [us["us_id"] for us in attrs[source]]
+        }
+
+        if UserStory.objects.filter(**filters).count() != len(filters["id__in"]):
+            raise ValidationError(_("All the user stories must be from the same project"))
+
+        return attrs

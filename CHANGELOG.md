@@ -1,4 +1,230 @@
-# Changelog #
+# Changelog
+
+## Unreleased
+
+## 4.2.2 (2019-03-21)
+
+### Features:
+
+- Fix milestone US serializer
+
+## 4.2.1 (2019-03-20)
+
+### Features:
+
+- Add dashboard filter for user stories updating queryset and serializer
+- Change milestone user story serializer
+- Remove additional order by in timeline queryset
+- Add user project slight queryset and serializer
+- Filter history comments queryset
+
+### Misc
+
+- Minor bug fixes.
+
+## 4.2.0 (2019-02-28)
+
+### Features:
+
+- Promote Tasks to US
+- Improve queries
+- Activate Hebrew and Basque languages
+
+### Misc
+
+- Minor bug fixes.
+
+## 4.1.0 (2019-02-04)
+
+### Misc
+
+- Fix Close sprints
+
+### Features:
+
+- Negative filters
+- Activate the Ukrainian language
+
+## 4.0.4 (2019-01-15)
+
+### Misc
+
+- Minor bug fixes.
+
+## 4.0.3 (2018-12-11)
+
+### Misc
+
+- Add extra requirements for oauthlib
+
+## 4.0.2 (2018-12-04)
+
+### Misc
+
+- Update messages catalog.
+
+## 4.0.1 (2018-11-28)
+
+### Misc
+
+- Minor bug fix.
+
+## 4.0.0 Larix cajanderi (2018-11-28)
+
+### Features
+
+- Custom home section (https://tree.taiga.io/project/taiga/issue/3059)
+- Custom fields (https://tree.taiga.io/project/taiga/issue/3725):
+    - Dropdown
+    - Checkbox
+    - Number
+- Bulk move unfinished objects in sprint (https://tree.taiga.io/project/taiga/issue/5451)
+- Paginate history activity
+- Improve notifications area (https://tree.taiga.io/project/taiga/issue/2165 and
+  https://tree.taiga.io/project/taiga/issue/3752)
+
+### Misc
+
+- Minor icon changes
+- Lots of small bugfixes
+ 
+## 3.4.5 (2018-10-15)
+
+### Features
+
+- Prevent local Webhooks 
+
+## 3.4.4 (2018-09-19)
+
+### Misc
+
+- Small fixes
+
+## 3.4.3 (2018-09-19)
+
+### Misc
+
+- Refactor attachment url's in timeline
+- Avoid receive feedkback in private projects from non-members
+- Allow delete reports uuid's
+- Small fixes
+
+## 3.4.0 Pinus contorta (2018-08-13)
+
+### Features
+
+- Due dates configuration (https://tree.taiga.io/project/taiga/issue/3070):
+    - Add due dates to admin attributes
+    - Update project templates
+- Issues to Sprints (https://tree.taiga.io/project/taiga/issue/1181):
+    - Add milestone filters
+
+## 3.3.14 (2018-08-06)
+
+### Misc
+
+- Improve US reorder algorithm.
+- Drop python 3.4 and add python 3.6 to travis configuration.
+
+## 3.3.13 (2018-07-05)
+
+### Misc
+
+- Minor bug fixes.
+
+## 3.3.11 (2018-06-27)
+
+### Features
+
+- Add assigned users kanban/taskboard filter.
+- Improve US reorder in kanban.
+- Upgrade psycopg2 library.
+
+## 3.3.8 (2018-06-14)
+
+### Misc
+
+- Minor bug fix.
+
+## 3.3.7 (2018-05-31)
+
+### Misc
+
+- Minor bug fix related with project import.
+
+- Pin requirements to solve incompatible versions detected by pip 10.
+
+## 3.3.4 (2018-05-24)
+
+### Misc
+
+- Add features to fulfill GDPR.
+
+## 3.3.3 (2018-05-10)
+
+### Misc
+
+- Update locales.
+- Minor bug fixes.
+
+## 3.3.1 (2018-04-30)
+
+### Misc
+
+- Minor bug fixes.
+
+## 3.3.1 (2018-04-30)
+
+### Misc
+
+- Minor bug fixes.
+
+## 3.3.0 Picea mariana (2018-04-26)
+
+### Features
+
+- Add "live notifications" to Taiga:
+    - Migration for user configuration.
+- Add due date to US, tasks and issues (https://tree.taiga.io/project/taiga/issue/3070):
+    - Add to csv export.
+    - Add to projects import/export.
+    - Add to webhooks.
+    - Add to django admin.
+- Add multiple assignement only in US (https://tree.taiga.io/project/taiga/issue/1961):
+    - The `assigned_to` field is still active.
+    - Add to csv export.
+    - Add to projects import/export.
+    - Add to webhooks.
+    - Add to django admin.
+- Delete cards in Kanban and sprint Taskboard (https://tree.taiga.io/project/taiga/issue/2683).
+
+## 3.2.3 (2018-04-04)
+
+### Misc
+
+- Fix milestone burndown graph with empty US.
+- Upgrade markdown library to solve bug.
+- Update locales.
+
+## 3.2.2 (2018-03-15)
+
+### Misc
+
+- Minor bug fixes.
+
+
+## 3.2.0 Betula nana (2018-03-07)
+
+### Features
+- Add role filtering in US.
+
+
+## 3.1.3 (2018-02-28)
+
+### Features
+- Increase token entropy.
+- Squash field changes on notification emails
+- Minor bug fixes.
 
 
 ## 3.1.0 Perovskia Atriplicifolia (2017-03-10)

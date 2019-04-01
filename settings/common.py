@@ -94,14 +94,14 @@ LANGUAGES = [
     #("es-ni", "Español (Nicaragua)"),  # Nicaraguan Spanish
     #("es-ve", "Español (Venezuela)"),  # Venezuelan Spanish
     #("et", "Eesti"),  # Estonian
-    #("eu", "Euskara"),  # Basque
-    #("fa", "فارسی‏"),  # Persian
+    ("eu", "Euskara"),  # Basque
+    ("fa", "فارسی‏"),  # Persian
     ("fi", "Suomi"),  # Finnish
     ("fr", "Français"),  # French
     #("fy", "Frysk"),  # Frisian
     #("ga", "Irish"),  # Irish
     #("gl", "Galego"),  # Galician
-    #("he", "עברית‏"),  # Hebrew
+    ("he", "עברית‏"),  # Hebrew
     #("hi", "हिन्दी"),  # Hindi
     #("hr", "Hrvatski"),  # Croatian
     #("hu", "Magyar"),  # Hungarian
@@ -148,7 +148,7 @@ LANGUAGES = [
     ("tr", "Türkçe"),  # Turkish
     #("tt", "татар теле"),  # Tatar
     #("udm", "удмурт кыл"),  # Udmurt
-    #("uk", "Українська"),  # Ukrainian
+    ("uk", "Українська"),  # Ukrainian
     #("ur", "اردو‏"),  # Urdu
     #("vi", "Tiếng Việt"),  # Vietnamese
     ("zh-hans", "中文(简体)"),  # Simplified Chinese
@@ -211,8 +211,10 @@ STATICFILES_DIRS = (
     # Don't forget to use absolute paths, not relative paths.
 )
 
-# Defautl storage
+# Default storage
 DEFAULT_FILE_STORAGE = "taiga.base.storage.FileSystemStorage"
+
+FILE_UPLOAD_PERMISSIONS = 0o644
 
 SECRET_KEY = "aw3+t2r(8(0kkrhg8)gx6i96v5^kv%6cfep9wxfom0%7dy0m9e"
 
@@ -307,6 +309,7 @@ INSTALLED_APPS = [
     "taiga.projects.issues",
     "taiga.projects.wiki",
     "taiga.projects.contact",
+    "taiga.projects.settings",
     "taiga.searches",
     "taiga.timeline",
     "taiga.mdrender",
@@ -454,6 +457,7 @@ REST_FRAMEWORK = {
         "login-fail": None,
         "register-success": None,
         "user-detail": None,
+        "user-update": None,
     },
     "DEFAULT_THROTTLE_WHITELIST": [],
     "FILTER_BACKEND": "taiga.base.filters.FilterBackend",
@@ -552,6 +556,7 @@ EXPORTS_TTL = 60 * 60 * 24  # 24 hours
 
 CELERY_ENABLED = False
 WEBHOOKS_ENABLED = False
+WEBHOOKS_BLOCK_PRIVATE_ADDRESS = False
 
 
 # If is True /front/sitemap.xml show a valid sitemap of taiga-front client

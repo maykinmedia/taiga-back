@@ -52,7 +52,8 @@ class UserStoryAdmin(admin.ModelAdmin):
         return self.obj
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if (db_field.name in ["status", "milestone", "generated_from_issue"]
+        if (db_field.name in ["status", "milestone", "generated_from_issue",
+                              "generated_from_task"]
                 and getattr(self, 'obj', None)):
             kwargs["queryset"] = db_field.related_model.objects.filter(
                                                       project=self.obj.project)
@@ -66,6 +67,10 @@ class UserStoryAdmin(admin.ModelAdmin):
         if (db_field.name in ["watchers"]
                 and getattr(self, 'obj', None)):
             kwargs["queryset"] = db_field.related.parent_model.objects.filter(
+                                         memberships__project=self.obj.project)
+        elif (db_field.name in ["assigned_users"]
+                and getattr(self, 'obj', None)):
+            kwargs["queryset"] = db_field.related_model.objects.filter(
                                          memberships__project=self.obj.project)
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 

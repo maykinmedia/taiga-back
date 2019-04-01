@@ -26,6 +26,7 @@ from django.utils import timezone
 from picklefield.fields import PickledObjectField
 
 from taiga.base.utils.time import timestamp_ms
+from taiga.projects.due_dates.models import DueDateMixin
 from taiga.projects.tagging.models import TaggedMixin
 from taiga.projects.occ import OCCModelMixin
 from taiga.projects.notifications.mixins import WatchedModelMixin
@@ -57,7 +58,7 @@ class RolePoints(models.Model):
         return self.user_story.project
 
 
-class UserStory(OCCModelMixin, WatchedModelMixin, BlockedMixin, TaggedMixin, models.Model):
+class UserStory(OCCModelMixin, WatchedModelMixin, BlockedMixin, TaggedMixin, DueDateMixin, models.Model):
     ref = models.BigIntegerField(db_index=True, null=True, blank=True, default=None,
                                  verbose_name=_("ref"))
     milestone = models.ForeignKey("milestones.Milestone", null=True, blank=True,
@@ -96,6 +97,9 @@ class UserStory(OCCModelMixin, WatchedModelMixin, BlockedMixin, TaggedMixin, mod
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True,
                                     default=None, related_name="userstories_assigned_to_me",
                                     verbose_name=_("assigned to"))
+    assigned_users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True,
+                                    default=None, related_name="assigned_userstories",
+                                    verbose_name=_("assigned users"))
     client_requirement = models.BooleanField(default=False, null=False, blank=True,
                                              verbose_name=_("is client requirement"))
     team_requirement = models.BooleanField(default=False, null=False, blank=True,
@@ -105,6 +109,10 @@ class UserStory(OCCModelMixin, WatchedModelMixin, BlockedMixin, TaggedMixin, mod
                                              on_delete=models.SET_NULL,
                                              related_name="generated_user_stories",
                                              verbose_name=_("generated from issue"))
+    generated_from_task = models.ForeignKey("tasks.Task", null=True, blank=True,
+                                             on_delete=models.SET_NULL,
+                                             related_name="generated_user_stories",
+                                             verbose_name=_("generated from task"))
     external_reference = ArrayField(models.TextField(null=False, blank=False),
                                     null=True, blank=True, default=None, verbose_name=_("external reference"))
 

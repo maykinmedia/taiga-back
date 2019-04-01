@@ -22,6 +22,7 @@ from taiga.base.neighbors import NeighborsSerializerMixin
 
 from taiga.mdrender.service import render as mdrender
 from taiga.projects.attachments.serializers import BasicAttachmentsInfoSerializerMixin
+from taiga.projects.due_dates.serializers import DueDateSerializerMixin
 from taiga.projects.mixins.serializers import AssignedToExtraInfoSerializerMixin
 from taiga.projects.mixins.serializers import OwnerExtraInfoSerializerMixin
 from taiga.projects.mixins.serializers import ProjectExtraInfoSerializerMixin
@@ -32,7 +33,7 @@ from taiga.projects.votes.mixins.serializers import VoteResourceSerializerMixin
 from taiga.projects.history.mixins import TotalCommentsSerializerMixin
 
 
-class OriginIssueSerializer(serializers.LightSerializer):
+class OriginItemSerializer(serializers.LightSerializer):
     id = Field()
     ref = Field()
     subject = Field()
@@ -49,7 +50,7 @@ class UserStoryListSerializer(ProjectExtraInfoSerializerMixin,
         OwnerExtraInfoSerializerMixin, AssignedToExtraInfoSerializerMixin,
         StatusExtraInfoSerializerMixin, BasicAttachmentsInfoSerializerMixin,
         TaggedInProjectResourceSerializer, TotalCommentsSerializerMixin,
-        serializers.LightSerializer):
+        DueDateSerializerMixin, serializers.LightSerializer):
 
     id = Field()
     ref = Field()
@@ -69,6 +70,7 @@ class UserStoryListSerializer(ProjectExtraInfoSerializerMixin,
     client_requirement = Field()
     team_requirement = Field()
     generated_from_issue = Field(attr="generated_from_issue_id")
+    generated_from_task = Field(attr="generated_from_task_id")
     external_reference = Field()
     tribe_gig = Field()
     version = Field()
@@ -77,10 +79,30 @@ class UserStoryListSerializer(ProjectExtraInfoSerializerMixin,
     blocked_note = Field()
     total_points = MethodField()
     comment = MethodField()
-    origin_issue = OriginIssueSerializer(attr="generated_from_issue")
+    origin_issue = OriginItemSerializer(attr="generated_from_issue")
+    origin_task = OriginItemSerializer(attr="generated_from_task")
     epics = MethodField()
     epic_order = MethodField()
     tasks = MethodField()
+    total_attachments = Field()
+
+    assigned_users = MethodField()
+
+    def get_assigned_users(self, obj):
+        """Get the assigned of an object.
+
+        :return: User queryset object representing the assigned users
+        """
+        if not obj.assigned_to:
+            return set([user.id for user in obj.assigned_users.all()])
+
+        assigned_users = [user.id for user in obj.assigned_users.all()] + \
+                         [obj.assigned_to.id]
+
+        if not assigned_users:
+            return None
+
+        return set(assigned_users)
 
     def get_epic_order(self, obj):
         include_epic_order = getattr(obj, "include_epic_order", False)
@@ -148,3 +170,24 @@ class UserStorySerializer(UserStoryListSerializer):
 
 class UserStoryNeighborsSerializer(NeighborsSerializerMixin, UserStorySerializer):
     pass
+
+
+class UserStoryLightSerializer(ProjectExtraInfoSerializerMixin,
+                               StatusExtraInfoSerializerMixin,
+                               AssignedToExtraInfoSerializerMixin,
+                               DueDateSerializerMixin, serializers.LightSerializer):
+    id = Field()
+    ref = Field()
+    milestone = Field(attr="milestone_id")
+    project = Field(attr="project_id")
+    is_closed = Field()
+    created_date = Field()
+    modified_date = Field()
+    finish_date = Field()
+    subject = Field()
+    client_requirement = Field()
+    team_requirement = Field()
+    external_reference = Field()
+    version = Field()
+    is_blocked = Field()
+    blocked_note = Field()
