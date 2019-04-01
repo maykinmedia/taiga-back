@@ -605,8 +605,31 @@ class Points(models.Model):
         return self.name
 
 
-# Tasks common models
+class UserStoryDueDate(models.Model):
+    name = models.CharField(max_length=255, null=False, blank=False,
+                            verbose_name=_("name"))
+    order = models.IntegerField(default=10, null=False, blank=False,
+                                verbose_name=_("order"))
+    by_default = models.BooleanField(default=False, null=False, blank=True,
+                                    verbose_name=_("by default"))
+    color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
+                             verbose_name=_("color"))
+    days_to_due = models.IntegerField(null=True, blank=True, default=None,
+                                    verbose_name=_("days to due"))
+    project = models.ForeignKey("Project", null=False, blank=False,
+                                related_name="us_duedates", verbose_name=_("project"))
 
+    class Meta:
+        verbose_name = "user story due date"
+        verbose_name_plural = "user story due dates"
+        ordering = ["project", "order", "name"]
+        unique_together = ("project", "name")
+
+    def __str__(self):
+        return self.name
+
+
+# Tasks common models
 class TaskStatus(models.Model):
     name = models.CharField(max_length=255, null=False, blank=False,
                             verbose_name=_("name"))
@@ -637,6 +660,30 @@ class TaskStatus(models.Model):
 
         self.slug = slugify_uniquely_for_queryset(self.name, qs)
         return super().save(*args, **kwargs)
+
+
+class TaskDueDate(models.Model):
+    name = models.CharField(max_length=255, null=False, blank=False,
+                            verbose_name=_("name"))
+    order = models.IntegerField(default=10, null=False, blank=False,
+                                verbose_name=_("order"))
+    by_default = models.BooleanField(default=False, null=False, blank=True,
+                                    verbose_name=_("by default"))
+    color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
+                             verbose_name=_("color"))
+    days_to_due = models.IntegerField(null=True, blank=True, default=None,
+                                    verbose_name=_("days to due"))
+    project = models.ForeignKey("Project", null=False, blank=False,
+                                related_name="task_duedates", verbose_name=_("project"))
+
+    class Meta:
+        verbose_name = "task due date"
+        verbose_name_plural = "task due dates"
+        ordering = ["project", "order", "name"]
+        unique_together = (("project", "name"))
+
+    def __str__(self):
+        return self.name
 
 
 # Issue common Models
@@ -733,6 +780,30 @@ class IssueType(models.Model):
         return self.name
 
 
+class IssueDueDate(models.Model):
+    name = models.CharField(max_length=255, null=False, blank=False,
+                            verbose_name=_("name"))
+    order = models.IntegerField(default=10, null=False, blank=False,
+                                verbose_name=_("order"))
+    by_default = models.BooleanField(default=False, null=False, blank=True,
+                                    verbose_name=_("by default"))
+    color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
+                             verbose_name=_("color"))
+    days_to_due = models.IntegerField(null=True, blank=True, default=None,
+                                    verbose_name=_("days to due"))
+    project = models.ForeignKey("Project", null=False, blank=False,
+                                related_name="issue_duedates", verbose_name=_("project"))
+
+    class Meta:
+        verbose_name = "issue due date"
+        verbose_name_plural = "issue due dates"
+        ordering = ["project", "order", "name"]
+        unique_together = ("project", "name")
+
+    def __str__(self):
+        return self.name
+
+
 class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
     name = models.CharField(max_length=250, null=False, blank=False,
                             verbose_name=_("name"))
@@ -775,10 +846,13 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
     default_options = JSONField(null=True, blank=True, verbose_name=_("default options"))
     epic_statuses = JSONField(null=True, blank=True, verbose_name=_("epic statuses"))
     us_statuses = JSONField(null=True, blank=True, verbose_name=_("us statuses"))
+    us_duedates = JSONField(null=True, blank=True, verbose_name=_("us duedates"))
     points = JSONField(null=True, blank=True, verbose_name=_("points"))
     task_statuses = JSONField(null=True, blank=True, verbose_name=_("task statuses"))
+    task_duedates = JSONField(null=True, blank=True, verbose_name=_("task duedates"))
     issue_statuses = JSONField(null=True, blank=True, verbose_name=_("issue statuses"))
     issue_types = JSONField(null=True, blank=True, verbose_name=_("issue types"))
+    issue_duedates = JSONField(null=True, blank=True, verbose_name=_("issue duedates"))
     priorities = JSONField(null=True, blank=True, verbose_name=_("priorities"))
     severities = JSONField(null=True, blank=True, verbose_name=_("severities"))
     roles = JSONField(null=True, blank=True, verbose_name=_("roles"))
@@ -850,6 +924,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 "order": us_status.order,
             })
 
+        self.us_duedates = []
+        for us_duedate in project.us_duedates.all():
+            self.us_duedates.append({
+                "name": us_duedate.name,
+                "by_default": us_duedate.by_default,
+                "color": us_duedate.color,
+                "days_to_due": us_duedate.days_to_due,
+                "order": us_duedate.order,
+            })
+
         self.points = []
         for us_point in project.points.all():
             self.points.append({
@@ -868,6 +952,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 "order": task_status.order,
             })
 
+        self.task_duedates = []
+        for task_duedate in project.task_duedates.all():
+            self.task_duedates.append({
+                "name": task_duedate.name,
+                "by_default": task_duedate.by_default,
+                "color": task_duedate.color,
+                "days_to_due": task_duedate.days_to_due,
+                "order": task_duedate.order,
+            })
+
         self.issue_statuses = []
         for issue_status in project.issue_statuses.all():
             self.issue_statuses.append({
@@ -884,6 +978,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 "name": issue_type.name,
                 "color": issue_type.color,
                 "order": issue_type.order,
+            })
+
+        self.issue_duedates = []
+        for issue_duedate in project.issue_duedates.all():
+            self.issue_duedates.append({
+                "name": issue_duedate.name,
+                "by_default": issue_duedate.by_default,
+                "color": issue_duedate.color,
+                "days_to_due": issue_duedate.days_to_due,
+                "order": issue_duedate.order,
             })
 
         self.priorities = []
@@ -997,6 +1101,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 project=project
             )
 
+        for us_duedate in self.us_duedates:
+            UserStoryDueDate.objects.create(
+                name=us_duedate["name"],
+                by_default=us_duedate["by_default"],
+                color=us_duedate["color"],
+                days_to_due=us_duedate["days_to_due"],
+                order=us_duedate["order"],
+                project=project
+            )
+
         for point in self.points:
             Points.objects.create(
                 name=point["name"],
@@ -1015,6 +1129,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 project=project
             )
 
+        for task_duedate in self.task_duedates:
+            TaskDueDate.objects.create(
+                name=task_duedate["name"],
+                by_default=task_duedate["by_default"],
+                color=task_duedate["color"],
+                days_to_due=task_duedate["days_to_due"],
+                order=task_duedate["order"],
+                project=project
+            )
+
         for issue_status in self.issue_statuses:
             IssueStatus.objects.create(
                 name=issue_status["name"],
@@ -1030,6 +1154,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 name=issue_type["name"],
                 color=issue_type["color"],
                 order=issue_type["order"],
+                project=project
+            )
+
+        for issue_duedate in self.issue_duedates:
+            IssueDueDate.objects.create(
+                name=issue_duedate["name"],
+                by_default=issue_duedate["by_default"],
+                color=issue_duedate["color"],
+                days_to_due=issue_duedate["days_to_due"],
+                order=issue_duedate["order"],
                 project=project
             )
 
@@ -1062,7 +1196,6 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
         if self.epic_statuses:
             project.default_epic_status = EpicStatus.objects.get(name=self.default_options["epic_status"],
                                                                  project=project)
-
         if self.us_statuses:
             project.default_us_status = UserStoryStatus.objects.get(name=self.default_options["us_status"],
                                                                     project=project)
@@ -1076,15 +1209,12 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
         if self.issue_statuses:
             project.default_issue_status = IssueStatus.objects.get(name=self.default_options["issue_status"],
                                                                    project=project)
-
         if self.issue_types:
             project.default_issue_type = IssueType.objects.get(name=self.default_options["issue_type"],
                                                                project=project)
-
         if self.priorities:
             project.default_priority = Priority.objects.get(name=self.default_options["priority"],
                                                             project=project)
-
         if self.severities:
             project.default_severity = Severity.objects.get(name=self.default_options["severity"],
                                                             project=project)

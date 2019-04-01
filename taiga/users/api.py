@@ -49,7 +49,7 @@ from . import services
 from . import utils as user_utils
 from .signals import user_cancel_account as user_cancel_account_signal
 from .signals import user_change_email as user_change_email_signal
-from .throttling import UserDetailRateThrottle
+from .throttling import UserDetailRateThrottle, UserUpdateRateThrottle
 
 class UsersViewSet(ModelCrudViewSet):
     permission_classes = (permissions.UserPermission,)
@@ -58,7 +58,7 @@ class UsersViewSet(ModelCrudViewSet):
     admin_validator_class = validators.UserAdminValidator
     validator_class = validators.UserValidator
     filter_backends = (MembersFilterBackend,)
-    throttle_classes = (UserDetailRateThrottle,)
+    throttle_classes = (UserDetailRateThrottle, UserUpdateRateThrottle)
     model = models.User
 
     def get_serializer_class(self):
@@ -134,7 +134,7 @@ class UsersViewSet(ModelCrudViewSet):
                 raise exc.WrongArguments(_("Not valid email"))
 
             # We need to generate a token for the email
-            request.user.email_token = str(uuid.uuid1())
+            request.user.email_token = str(uuid.uuid4())
             request.user.new_email = new_email
             request.user.save(update_fields=["email_token", "new_email"])
             email = mail_builder.change_email(
@@ -172,7 +172,7 @@ class UsersViewSet(ModelCrudViewSet):
             raise exc.WrongArguments(_("Invalid username or email"))
 
         user = get_user_by_username_or_email(username_or_email)
-        user.token = str(uuid.uuid1())
+        user.token = str(uuid.uuid4())
         user.save(update_fields=["token"])
 
         email = mail_builder.password_recovery(user, {"user": user})
@@ -329,6 +329,20 @@ class UsersViewSet(ModelCrudViewSet):
 
         user.cancel()
         return response.NoContent()
+
+
+    @list_route(methods=["POST"])
+    def export(self, request, pk=None):
+        """
+        Export user data and photo
+        """
+        file_url = services.export_profile(request.user)
+
+        response_data = {
+            "url": file_url
+        }
+        return response.Ok(response_data)
+
 
     @detail_route(methods=["GET"])
     def contacts(self, request, *args, **kwargs):

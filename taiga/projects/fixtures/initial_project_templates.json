@@ -120,6 +120,29 @@
                 "wip_limit": null
             }
         ],
+        "us_duedates": [
+            {
+                "name": "Default",
+                "order": 1,
+                "by_default": true,
+                "color": "#9dce0a",
+                "days_to_due": null
+            },
+            {
+                "name": "Due soon",
+                "order": 2,
+                "by_default": false,
+                "color": "#ff9900",
+                "days_to_due": 14
+            },
+            {
+                "name": "Past due",
+                "order": 3,
+                "by_default": false,
+                "color": "#ff8a84",
+                "days_to_due": 0
+            }
+        ],
         "points": [
             {
                 "name": "?",
@@ -219,6 +242,29 @@
                 "is_closed": false
             }
         ],
+        "task_duedates": [
+            {
+                "name": "Default",
+                "order": 1,
+                "by_default": true,
+                "color": "#9dce0a",
+                "days_to_due": null
+            },
+            {
+                "name": "Due soon",
+                "order": 2,
+                "by_default": false,
+                "color": "#ff9900",
+                "days_to_due": 14
+            },
+            {
+                "name": "Past due",
+                "order": 3,
+                "by_default": false,
+                "color": "#ff8a84",
+                "days_to_due": 0
+            }
+        ],
         "issue_statuses": [
             {
                 "slug": "new",
@@ -285,6 +331,29 @@
                 "color": "#89a8ba",
                 "name": "Enhancement",
                 "order": 3
+            }
+        ],
+        "issue_duedates": [
+            {
+                "name": "Default",
+                "order": 1,
+                "by_default": true,
+                "color": "#9dce0a",
+                "days_to_due": null
+            },
+            {
+                "name": "Due soon",
+                "order": 2,
+                "by_default": false,
+                "color": "#ff9900",
+                "days_to_due": 14
+            },
+            {
+                "name": "Past due",
+                "order": 3,
+                "by_default": false,
+                "color": "#ff8a84",
+                "days_to_due": 0
             }
         ],
         "priorities": [
@@ -692,6 +761,29 @@
                 "wip_limit": null
             }
         ],
+        "us_duedates": [
+            {
+                "name": "Default",
+                "order": 1,
+                "by_default": true,
+                "color": "#9dce0a",
+                "days_to_due": null
+            },
+            {
+                "name": "Due soon",
+                "order": 2,
+                "by_default": false,
+                "color": "#ff9900",
+                "days_to_due": 14
+            },
+            {
+                "name": "Past due",
+                "order": 3,
+                "by_default": false,
+                "color": "#ff8a84",
+                "days_to_due": 0
+            }
+        ],
         "points": [
             {
                 "name": "?",
@@ -791,6 +883,29 @@
                 "is_closed": false
             }
         ],
+        "task_duedates": [
+            {
+                "name": "Default",
+                "order": 1,
+                "by_default": true,
+                "color": "#9dce0a",
+                "days_to_due": null
+            },
+            {
+                "name": "Due soon",
+                "order": 2,
+                "by_default": false,
+                "color": "#ff9900",
+                "days_to_due": 14
+            },
+            {
+                "name": "Past due",
+                "order": 3,
+                "by_default": false,
+                "color": "#ff8a84",
+                "days_to_due": 0
+            }
+        ],
         "issue_statuses": [
             {
                 "slug": "new",
@@ -857,6 +972,29 @@
                 "color": "#4e9a06",
                 "name": "Enhancement",
                 "order": 3
+            }
+        ],
+        "issue_duedates": [
+            {
+                "name": "Default",
+                "order": 1,
+                "by_default": true,
+                "color": "#9dce0a",
+                "days_to_due": null
+            },
+            {
+                "name": "Due soon",
+                "order": 2,
+                "by_default": false,
+                "color": "#ff9900",
+                "days_to_due": 14
+            },
+            {
+                "name": "Past due",
+                "order": 3,
+                "by_default": false,
+                "color": "#ff8a84",
+                "days_to_due": 0
             }
         ],
         "priorities": [

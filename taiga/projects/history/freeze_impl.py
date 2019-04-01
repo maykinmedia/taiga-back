@@ -28,7 +28,7 @@ from taiga.base.utils.iterators import as_tuple
 from taiga.base.utils.iterators import as_dict
 from taiga.mdrender.service import render as mdrender
 
-from taiga.projects.attachments.services import get_timeline_image_thumbnail_url
+from taiga.projects.attachments.services import get_timeline_image_thumbnail_name
 
 import os
 
@@ -88,14 +88,18 @@ def _common_users_values(diff):
     values = {}
     users = set()
 
-    if "owner" in diff:
+    if "owner" in diff and isinstance(diff["owner"], int):
         users.update(diff["owner"])
     if "assigned_to" in diff:
         users.update(diff["assigned_to"])
-    if users:
-        values["users"] = _get_users_values(users)
+    if "assigned_users" in diff:
+        [users.update(usrs_ids) for usrs_ids in diff["assigned_users"] if
+         usrs_ids]
+
+    values["users"] = _get_users_values(users) if users else {}
 
     return values
+
 
 def project_values(diff):
     values = _common_users_values(diff)
@@ -194,12 +198,14 @@ def _generic_extract(obj:object, fields:list, default=None) -> dict:
 @as_tuple
 def extract_attachments(obj) -> list:
     for attach in obj.attachments.all():
-        thumb_url = get_timeline_image_thumbnail_url(attach)
+        # Force the creation of a thumbnail for the timeline
+        thumbnail_file = get_timeline_image_thumbnail_name(attach)
 
         yield {"id": attach.id,
                "filename": os.path.basename(attach.attached_file.name),
                "url": attach.attached_file.url,
-               "thumb_url": thumb_url,
+               "attached_file": str(attach.attached_file),
+               "thumbnail_file": thumbnail_file,
                "is_deprecated": attach.is_deprecated,
                "description": attach.description,
                "order": attach.order}
@@ -262,7 +268,9 @@ def project_freezer(project) -> dict:
               "slug",
               "created_at",
               "owner_id",
-              "public",
+              "is_private",
+              "anon_permissions",
+              "public_permissions",
               "total_milestones",
               "total_story_points",
               "tags",
@@ -330,6 +338,12 @@ def userstory_freezer(us) -> dict:
     for rp in rpqsd:
         points[str(rp.role_id)] = rp.points_id
 
+    assigned_users = [u.id for u in us.assigned_users.all()]
+    # Due to multiple assignment migration, for new snapshots we add to
+    # assigned users a list with the 'assigned to' value
+    if us.assigned_to_id and not assigned_users:
+        assigned_users = [us.assigned_to_id]
+
     snapshot = {
         "ref": us.ref,
         "owner": us.owner_id,
@@ -343,6 +357,7 @@ def userstory_freezer(us) -> dict:
         "description": us.description,
         "description_html": mdrender(us.project, us.description),
         "assigned_to": us.assigned_to_id,
+        "assigned_users": assigned_users,
         "milestone": us.milestone_id,
         "client_requirement": us.client_requirement,
         "team_requirement": us.team_requirement,
@@ -350,11 +365,13 @@ def userstory_freezer(us) -> dict:
         "tags": us.tags,
         "points": points,
         "from_issue": us.generated_from_issue_id,
+        "from_task": us.generated_from_task_id,
         "is_blocked": us.is_blocked,
         "blocked_note": us.blocked_note,
         "blocked_note_html": mdrender(us.project, us.blocked_note),
         "custom_attributes": extract_user_story_custom_attributes(us),
         "tribe_gig": us.tribe_gig,
+        "due_date": str(us.due_date) if us.due_date else None
     }
 
     return snapshot
@@ -379,6 +396,7 @@ def issue_freezer(issue) -> dict:
         "blocked_note": issue.blocked_note,
         "blocked_note_html": mdrender(issue.project, issue.blocked_note),
         "custom_attributes": extract_issue_custom_attributes(issue),
+        "due_date": str(issue.due_date) if issue.due_date else None
     }
 
     return snapshot
@@ -404,6 +422,7 @@ def task_freezer(task) -> dict:
         "blocked_note": task.blocked_note,
         "blocked_note_html": mdrender(task.project, task.blocked_note),
         "custom_attributes": extract_task_custom_attributes(task),
+        "due_date": str(task.due_date) if task.due_date else None
     }
 
     return snapshot

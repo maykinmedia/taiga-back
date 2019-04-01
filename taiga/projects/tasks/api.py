@@ -30,7 +30,9 @@ from taiga.projects.history.mixins import HistoryResourceMixin
 from taiga.projects.milestones.models import Milestone
 from taiga.projects.mixins.by_ref import ByRefMixin
 from taiga.projects.models import Project, TaskStatus
-from taiga.projects.notifications.mixins import WatchedResourceMixin, WatchersViewSetMixin
+from taiga.projects.notifications.mixins import AssignedToSignalMixin
+from taiga.projects.notifications.mixins import WatchedResourceMixin
+from taiga.projects.notifications.mixins import WatchersViewSetMixin
 from taiga.projects.occ import OCCResourceMixin
 from taiga.projects.tagging.api import TaggedResourceMixin
 from taiga.projects.userstories.models import UserStory
@@ -45,12 +47,15 @@ from . import validators
 from . import utils as tasks_utils
 
 
-class TaskViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, WatchedResourceMixin,
-                  ByRefMixin, TaggedResourceMixin, BlockedByProjectMixin, ModelCrudViewSet):
+class TaskViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
+                  HistoryResourceMixin, WatchedResourceMixin,  ByRefMixin,
+                  TaggedResourceMixin, BlockedByProjectMixin,
+                  ModelCrudViewSet):
     validator_class = validators.TaskValidator
     queryset = models.Task.objects.all()
     permission_classes = (permissions.TaskPermission,)
     filter_backends = (filters.CanViewTasksFilterBackend,
+                       filters.RoleFilter,
                        filters.OwnersFilter,
                        filters.AssignedToFilter,
                        filters.StatusesFilter,
@@ -67,6 +72,15 @@ class TaskViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, Wa
                      "project",
                      "project__slug",
                      "status__is_closed"]
+    order_by_fields = ("project",
+                       "milestone",
+                       "status",
+                       "created_date",
+                       "modified_date",
+                       "assigned_to",
+                       "us_order",
+                       "subject",
+                       "total_voters")
 
     def get_serializer_class(self, *args, **kwargs):
         if self.action in ["retrieve", "by_ref"]:
@@ -211,13 +225,15 @@ class TaskViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, Wa
         statuses_filter_backends = (f for f in filter_backends if f != filters.StatusesFilter)
         assigned_to_filter_backends = (f for f in filter_backends if f != filters.AssignedToFilter)
         owners_filter_backends = (f for f in filter_backends if f != filters.OwnersFilter)
+        roles_filter_backends = (f for f in filter_backends if f != filters.RoleFilter)
 
         queryset = self.get_queryset()
         querysets = {
             "statuses": self.filter_queryset(queryset, filter_backends=statuses_filter_backends),
             "assigned_to": self.filter_queryset(queryset, filter_backends=assigned_to_filter_backends),
             "owners": self.filter_queryset(queryset, filter_backends=owners_filter_backends),
-            "tags": self.filter_queryset(queryset)
+            "tags": self.filter_queryset(queryset),
+            "roles": self.filter_queryset(queryset, filter_backends=roles_filter_backends),
         }
         return response.Ok(services.get_tasks_filters_data(project, querysets))
 
@@ -258,6 +274,23 @@ class TaskViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, Wa
         tasks_serialized = self.get_serializer_class()(tasks, many=True)
 
         return response.Ok(tasks_serialized.data)
+
+    @list_route(methods=["POST"])
+    def bulk_update_milestone(self, request, **kwargs):
+        validator = validators.UpdateMilestoneBulkValidator(data=request.DATA)
+        if not validator.is_valid():
+            return response.BadRequest(validator.errors)
+
+        data = validator.data
+        project = get_object_or_404(Project, pk=data["project_id"])
+        milestone = get_object_or_404(Milestone, pk=data["milestone_id"])
+
+        self.check_permissions(request, "bulk_update_milestone", project)
+
+        ret = services.update_tasks_milestone_in_bulk(data["bulk_tasks"], milestone)
+        services.snapshot_tasks_in_bulk(data["bulk_tasks"], request.user)
+
+        return response.Ok(ret)
 
     def _bulk_update_order(self, order_field, request, **kwargs):
         validator = validators.UpdateTasksOrderBulkValidator(data=request.DATA)

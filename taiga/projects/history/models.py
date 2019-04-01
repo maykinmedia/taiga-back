@@ -30,7 +30,7 @@ from .choices import HistoryType
 from .choices import HISTORY_TYPE_CHOICES
 
 from taiga.base.utils.diff import make_diff as make_diff_from_dicts
-from taiga.projects.custom_attributes.choices import TEXT_TYPE
+from taiga.projects.custom_attributes.choices import CHECKBOX_TYPE, NUMBER_TYPE, TEXT_TYPE
 
 # This keys has been removed from freeze_impl so we can have objects where the
 # previous diff has value for the attribute and we want to prevent their propagation
@@ -176,6 +176,18 @@ class HistoryEntry(models.Model):
                 (key, value) = resolve_diff_value(key)
             elif key in users_keys:
                 value = [resolve_value("users", x) for x in self.diff[key]]
+            elif key == "assigned_users":
+                diff_in, diff_out = self.diff[key]
+                value_in = None
+                value_out = None
+
+                if diff_in:
+                    users_list = [resolve_value("users", x) for x in diff_in if x]
+                    value_in = ", ".join(filter(None, users_list))
+                if diff_out:
+                    users_list = [resolve_value("users", x) for x in diff_out if x]
+                    value_out = ", ".join(filter(None, users_list))
+                value = [value_in, value_out]
             elif key == "points":
                 points = {}
 
@@ -250,13 +262,19 @@ class HistoryEntry(models.Model):
                     if aid in oldcustattrs and aid in newcustattrs:
                         changes = make_diff_from_dicts(oldcustattrs[aid], newcustattrs[aid],
                                                        excluded_keys=("name"))
-
                         newcustattr = newcustattrs.get(aid, {})
                         if changes:
                             change_type = newcustattr.get("type", TEXT_TYPE)
-                            old_value = oldcustattrs[aid].get("value", "")
-                            new_value = newcustattrs[aid].get("value", "")
-                            value_diff = get_diff_of_htmls(old_value, new_value)
+
+                            if change_type in [NUMBER_TYPE, CHECKBOX_TYPE]:
+                                old_value = oldcustattrs[aid].get("value")
+                                new_value = newcustattrs[aid].get("value")
+                                value_diff = [old_value, new_value]
+                            else:
+                                old_value = oldcustattrs[aid].get("value", "")
+                                new_value = newcustattrs[aid].get("value", "")
+                                value_diff = get_diff_of_htmls(old_value,
+                                                               new_value)
                             change = {
                                 "name": newcustattr.get("name", ""),
                                 "changes": changes,
@@ -267,8 +285,15 @@ class HistoryEntry(models.Model):
                     elif aid in oldcustattrs and aid not in newcustattrs:
                         custom_attributes["deleted"].append(oldcustattrs[aid])
                     elif aid not in oldcustattrs and aid in newcustattrs:
-                        new_value = newcustattrs[aid].get("value", "")
-                        value_diff = get_diff_of_htmls("", new_value)
+                        newcustattr = newcustattrs.get(aid, {})
+                        change_type = newcustattr.get("type", TEXT_TYPE)
+                        if change_type in [NUMBER_TYPE, CHECKBOX_TYPE]:
+                            old_value = None
+                            new_value = newcustattrs[aid].get("value")
+                            value_diff = [old_value, new_value]
+                        else:
+                            new_value = newcustattrs[aid].get("value", "")
+                            value_diff = get_diff_of_htmls("", new_value)
                         newcustattrs[aid]["value_diff"] = value_diff
                         custom_attributes["new"].append(newcustattrs[aid])
 

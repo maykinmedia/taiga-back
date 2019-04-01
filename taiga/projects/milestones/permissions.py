@@ -33,6 +33,11 @@ class MilestonePermission(TaigaResourcePermission):
     stats_perms = HasProjectPerm('view_milestones')
     watch_perms = IsAuthenticated() & HasProjectPerm('view_milestones')
     unwatch_perms = IsAuthenticated() & HasProjectPerm('view_milestones')
+    move_related_items_perms = HasProjectPerm('modify_milestone')
+    move_uss_to_sprint_perms = HasProjectPerm('modify_us')
+    move_tasks_to_sprint_perms = HasProjectPerm('modify_task')
+    move_issues_to_sprint_perms = HasProjectPerm('modify_issue')
+
 
 class MilestoneWatchersPermission(TaigaResourcePermission):
     enought_perms = IsProjectAdmin() | IsSuperUser()

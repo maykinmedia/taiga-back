@@ -22,7 +22,7 @@ from dateutil.parser import parse as parse_date
 
 from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Q
+from django.db.models import Q, OuterRef, Subquery
 from django.utils.translation import ugettext as _
 
 from taiga.base import exceptions as exc
@@ -30,6 +30,30 @@ from taiga.base.api.utils import get_object_or_404
 from taiga.base.utils.db import to_tsquery
 
 logger = logging.getLogger(__name__)
+
+
+def get_filter_expression_can_view_projects(user, project_id=None):
+    # Filter by user permissions
+    if user.is_authenticated() and user.is_superuser:
+        return Q()
+    elif user.is_authenticated():
+        # authenticated user & project member
+        membership_model = apps.get_model("projects", "Membership")
+        memberships_qs = membership_model.objects.filter(user=user)
+        if project_id:
+            memberships_qs = memberships_qs.filter(project_id=project_id)
+        memberships_qs = memberships_qs.filter(
+            Q(role__permissions__contains=['view_project']) |
+            Q(is_admin=True))
+
+        projects_list = [membership.project_id for membership in
+                         memberships_qs]
+
+        return (Q(id__in=projects_list) |
+                Q(public_permissions__contains=["view_project"]))
+    else:
+        # external users / anonymous
+        return Q(anon_permissions__contains=["view_project"])
 
 
 #####################################################################
@@ -114,6 +138,17 @@ class FilterBackend(OrderByFilterMixin):
     Default filter backend.
     """
     pass
+
+
+class FilterModelAssignedUsers:
+    def get_assigned_users_filter(self, model, value):
+        assigned_users_ids = model.objects.order_by().filter(
+            assigned_users__in=value, id=OuterRef('pk')).values('pk')
+
+        assigned_user_filter = Q(pk__in=Subquery(assigned_users_ids))
+        assigned_to_filter = Q(assigned_to__in=value)
+
+        return Q(assigned_user_filter | assigned_to_filter)
 
 
 #####################################################################
@@ -340,13 +375,17 @@ class IsProjectAdminFromWebhookLogFilterBackend(FilterBackend, BaseIsProjectAdmi
 class BaseRelatedFieldsFilter(FilterBackend):
     filter_name = None
     param_name = None
+    exclude_param_name = None
 
-    def __init__(self, filter_name=None, param_name=None):
+    def __init__(self, filter_name=None, param_name=None, exclude_param_name=None):
         if filter_name:
             self.filter_name = filter_name
 
         if param_name:
             self.param_name = param_name
+
+        if exclude_param_name:
+            self.exclude_param_name
 
     def _prepare_filter_data(self, query_param_value):
         def _transform_value(value):
@@ -361,75 +400,139 @@ class BaseRelatedFieldsFilter(FilterBackend):
         values = map(_transform_value, values)
         return list(values)
 
-    def _get_queryparams(self, params):
-        param_name = self.param_name or self.filter_name
+    def _get_queryparams(self, params, mode=''):
+        param_name = self.exclude_param_name if mode == 'exclude' else self.param_name or self.filter_name
         raw_value = params.get(param_name, None)
-
         if raw_value:
             value = self._prepare_filter_data(raw_value)
-
             if None in value:
                 qs_in_kwargs = {"{}__in".format(self.filter_name): [v for v in value if v is not None]}
                 qs_isnull_kwargs = {"{}__isnull".format(self.filter_name): True}
                 return Q(**qs_in_kwargs) | Q(**qs_isnull_kwargs)
             else:
-                return {"{}__in".format(self.filter_name): value}
+                return Q(**{"{}__in".format(self.filter_name): value})
 
         return None
 
+    def _prepare_filter_query(self, query):
+        return query
+
+    def _prepare_exclude_query(self, query):
+        return ~Q(query)
+
     def filter_queryset(self, request, queryset, view):
-        query = self._get_queryparams(request.QUERY_PARAMS)
-        if query:
-            if isinstance(query, dict):
-                queryset = queryset.filter(**query)
-            else:
-                queryset = queryset.filter(query)
+        operations = {
+            "filter": self._prepare_filter_query,
+            "exclude": self._prepare_exclude_query,
+        }
+
+        for mode, prepare_method in operations.items():
+            query = self._get_queryparams(request.QUERY_PARAMS, mode=mode)
+            if query:
+                queryset = queryset.filter(prepare_method(query))
 
         return super().filter_queryset(request, queryset, view)
 
 
 class OwnersFilter(BaseRelatedFieldsFilter):
     filter_name = 'owner'
+    exclude_param_name = 'exclude_owner'
 
 
 class AssignedToFilter(BaseRelatedFieldsFilter):
     filter_name = 'assigned_to'
+    exclude_param_name = 'exclude_assigned_to'
+
+
+class AssignedUsersFilter(FilterModelAssignedUsers, BaseRelatedFieldsFilter):
+    filter_name = 'assigned_users'
+    exclude_param_name = 'exclude_assigned_users'
+
+    def _get_queryparams(self, params, mode=''):
+        param_name = self.exclude_param_name if mode == 'exclude' else self.param_name or self.filter_name
+        raw_value = params.get(param_name, None)
+        if raw_value:
+            value = self._prepare_filter_data(raw_value)
+            UserStoryModel = apps.get_model("userstories", "UserStory")
+
+            if None in value:
+                value.remove(None)
+                assigned_users_ids = UserStoryModel.objects.order_by().filter(
+                    assigned_users__isnull=True,
+                    id=OuterRef('pk')).values('pk')
+
+                assigned_user_filter_none = Q(pk__in=Subquery(assigned_users_ids))
+                assigned_to_filter_none = Q(assigned_to__isnull=True)
+
+                return (self.get_assigned_users_filter(UserStoryModel, value)
+                        | Q(assigned_user_filter_none, assigned_to_filter_none))
+            else:
+                return self.get_assigned_users_filter(UserStoryModel, value)
+
+        return None
 
 
 class StatusesFilter(BaseRelatedFieldsFilter):
     filter_name = 'status'
+    exclude_param_name = 'exclude_status'
 
 
 class IssueTypesFilter(BaseRelatedFieldsFilter):
     filter_name = 'type'
+    param_name = 'type'
+    exclude_param_name = 'exclude_type'
 
 
 class PrioritiesFilter(BaseRelatedFieldsFilter):
     filter_name = 'priority'
+    exclude_param_name = 'exclude_priority'
 
 
 class SeveritiesFilter(BaseRelatedFieldsFilter):
     filter_name = 'severity'
+    exclude_param_name = 'exclude_severity'
 
 
 class TagsFilter(FilterBackend):
     filter_name = 'tags'
+    exclude_param_name = 'exclude_tags'
 
-    def __init__(self, filter_name=None):
+    def __init__(self, filter_name=None, exclude_param_name=None):
         if filter_name:
             self.filter_name = filter_name
 
-    def _get_tags_queryparams(self, params):
-        tags = params.get(self.filter_name, None)
+        if exclude_param_name:
+            self.exclude_param_name = exclude_param_name
+
+    def _get_tags_queryparams(self, params, mode=''):
+        param_name = self.exclude_param_name if mode == "exclude" else self.filter_name
+        tags = params.get(param_name, None)
         if tags:
             return tags.split(",")
 
         return None
 
+    def _prepare_filter_query(self, query):
+        return Q(tags__contains=query)
+
+    def _prepare_exclude_query(self, tags):
+        queries = [Q(tags__contains=[tag]) for tag in tags]
+        query = queries.pop()
+        for item in queries:
+            query |= item
+
+        return ~Q(query)
+
     def filter_queryset(self, request, queryset, view):
-        query_tags = self._get_tags_queryparams(request.QUERY_PARAMS)
-        if query_tags:
-            queryset = queryset.filter(tags__contains=query_tags)
+        operations = {
+            "filter": self._prepare_filter_query,
+            "exclude": self._prepare_exclude_query,
+        }
+
+        for mode, prepare_method in operations.items():
+            query = self._get_tags_queryparams(request.QUERY_PARAMS, mode=mode)
+            if query:
+                queryset = queryset.filter(prepare_method(query))
 
         return super().filter_queryset(request, queryset, view)
 
@@ -563,3 +666,52 @@ class QFilter(FilterBackend):
             queryset = queryset.extra(where=[where_clause], params=[to_tsquery(q)])
 
         return queryset
+
+
+class RoleFilter(BaseRelatedFieldsFilter):
+    filter_name = "role_id"
+    param_name = "role"
+    exclude_param_name = "exclude_role"
+
+    def filter_queryset(self, request, queryset, view):
+        Membership = apps.get_model('projects', 'Membership')
+
+        operations = {
+            "filter": self._prepare_filter_query,
+            "exclude": self._prepare_exclude_query,
+        }
+
+        for mode, qs_method in operations.items():
+            query = self._get_queryparams(request.QUERY_PARAMS, mode=mode)
+            if query:
+                memberships = Membership.objects.filter(query).exclude(user__isnull=True).values_list("user_id", flat=True)
+                if memberships:
+                    queryset = queryset.filter(qs_method(Q(assigned_to__in=memberships)))
+
+        return FilterBackend.filter_queryset(self, request, queryset, view)
+
+
+class UserStoriesRoleFilter(FilterModelAssignedUsers, BaseRelatedFieldsFilter):
+    filter_name = "role_id"
+    param_name = "role"
+    exclude_param_name = 'exclude_role'
+
+    def filter_queryset(self, request, queryset, view):
+        Membership = apps.get_model('projects', 'Membership')
+
+        operations = {
+            "filter": self._prepare_filter_query,
+            "exclude": self._prepare_exclude_query,
+        }
+
+        for mode, qs_method in operations.items():
+            query = self._get_queryparams(request.QUERY_PARAMS, mode=mode)
+            if query:
+                memberships = Membership.objects.filter(query).exclude(user__isnull=True).values_list("user_id", flat=True)
+                if memberships:
+                    user_story_model = apps.get_model("userstories", "UserStory")
+                    queryset = queryset.filter(
+                        qs_method(Q(self.get_assigned_users_filter(user_story_model, memberships)))
+                    )
+
+        return FilterBackend.filter_queryset(self, request, queryset, view)

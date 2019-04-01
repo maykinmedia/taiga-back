@@ -62,15 +62,33 @@ class UserStoryStatusExportValidator(validators.ModelValidator):
         exclude = ('id', 'project')
 
 
+class UserStoryDueDateExportValidator(validators.ModelValidator):
+    class Meta:
+        model = projects_models.UserStoryDueDate
+        exclude = ('id', 'project')
+
+
 class TaskStatusExportValidator(validators.ModelValidator):
     class Meta:
         model = projects_models.TaskStatus
         exclude = ('id', 'project')
 
 
+class TaskDueDateExportValidator(validators.ModelValidator):
+    class Meta:
+        model = projects_models.TaskDueDate
+        exclude = ('id', 'project')
+
+
 class IssueStatusExportValidator(validators.ModelValidator):
     class Meta:
         model = projects_models.IssueStatus
+        exclude = ('id', 'project')
+
+
+class IssueDueDateExportValidator(validators.ModelValidator):
+    class Meta:
+        model = projects_models.IssueDueDate
         exclude = ('id', 'project')
 
 
@@ -258,6 +276,7 @@ class TaskExportValidator(WatcheableObjectModelValidatorMixin):
     milestone = ProjectRelatedField(slug_field="name", required=False)
     assigned_to = UserRelatedField(required=False)
     modified_date = serializers.DateTimeField(required=False)
+    due_date = serializers.DateTimeField(required=False)
 
     class Meta:
         model = tasks_models.Task
@@ -301,10 +320,13 @@ class UserStoryExportValidator(WatcheableObjectModelValidatorMixin):
     role_points = RolePointsExportValidator(many=True, required=False)
     owner = UserRelatedField(required=False)
     assigned_to = UserRelatedField(required=False)
+    assigned_users = UserRelatedField(many=True, required=False)
     status = ProjectRelatedField(slug_field="name")
     milestone = ProjectRelatedField(slug_field="name", required=False)
     modified_date = serializers.DateTimeField(required=False)
     generated_from_issue = ProjectRelatedField(slug_field="ref", required=False)
+    generated_from_task = ProjectRelatedField(slug_field="ref", required=False)
+    due_date = serializers.DateTimeField(required=False)
 
     class Meta:
         model = userstories_models.UserStory
@@ -327,6 +349,7 @@ class IssueExportValidator(WatcheableObjectModelValidatorMixin):
     type = ProjectRelatedField(slug_field="name")
     milestone = ProjectRelatedField(slug_field="name", required=False)
     modified_date = serializers.DateTimeField(required=False)
+    due_date = serializers.DateTimeField(required=False)
 
     class Meta:
         model = issues_models.Issue

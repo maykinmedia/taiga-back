@@ -37,6 +37,16 @@ from .notifications.choices import NotifyLevel
 # Custom values for selectors
 ######################################################
 
+class BaseDueDateSerializer(serializers.LightSerializer):
+    id = Field()
+    name = I18NField()
+    order = Field()
+    by_default = Field()
+    days_to_due = Field()
+    color = Field()
+    project = Field(attr="project_id")
+
+
 class EpicStatusSerializer(serializers.LightSerializer):
     id = Field()
     name = I18NField()
@@ -67,6 +77,10 @@ class PointsSerializer(serializers.LightSerializer):
     project = Field(attr="project_id")
 
 
+class UserStoryDueDateSerializer(BaseDueDateSerializer):
+    pass
+
+
 class TaskStatusSerializer(serializers.LightSerializer):
     id = Field()
     name = I18NField()
@@ -75,6 +89,10 @@ class TaskStatusSerializer(serializers.LightSerializer):
     is_closed = Field()
     color = Field()
     project = Field(attr="project_id")
+
+
+class TaskDueDateSerializer(BaseDueDateSerializer):
+    pass
 
 
 class SeveritySerializer(serializers.LightSerializer):
@@ -109,6 +127,10 @@ class IssueTypeSerializer(serializers.LightSerializer):
     order = Field()
     color = Field()
     project = Field(attr="project_id")
+
+
+class IssueDueDateSerializer(BaseDueDateSerializer):
+    pass
 
 
 ######################################################
@@ -268,6 +290,8 @@ class ProjectSerializer(serializers.LightSerializer):
 
     is_fan = Field(attr="is_fan_attr")
 
+    my_homepage = MethodField()
+
     def get_members(self, obj):
         assert hasattr(obj, "members_attr"), "instance must have a members_attr attribute"
         if obj.members_attr is None:
@@ -352,14 +376,24 @@ class ProjectSerializer(serializers.LightSerializer):
     def get_logo_big_url(self, obj):
         return services.get_logo_big_thumbnail_url(obj)
 
+    def get_my_homepage(self, obj):
+        assert hasattr(obj, "my_homepage_attr"), "instance must have a my_homepage_attr attribute"
+        if obj.my_homepage_attr is None:
+            return False
+
+        return obj.my_homepage_attr
+
 
 class ProjectDetailSerializer(ProjectSerializer):
     epic_statuses = Field(attr="epic_statuses_attr")
     us_statuses = Field(attr="userstory_statuses_attr")
+    us_duedates = Field(attr="userstory_duedates_attr")
     points = Field(attr="points_attr")
     task_statuses = Field(attr="task_statuses_attr")
+    task_duedates = Field(attr="task_duedates_attr")
     issue_statuses = Field(attr="issue_statuses_attr")
     issue_types = Field(attr="issue_types_attr")
+    issue_duedates = Field(attr="issue_duedates_attr")
     priorities = Field(attr="priorities_attr")
     severities = Field(attr="severities_attr")
     epic_custom_attributes = Field(attr="epic_custom_attributes_attr")
@@ -390,10 +424,15 @@ class ProjectDetailSerializer(ProjectSerializer):
 
     def to_value(self, instance):
         # Name attributes must be translated
-        for attr in ["epic_statuses_attr", "userstory_statuses_attr", "points_attr", "task_statuses_attr",
-                     "issue_statuses_attr", "issue_types_attr", "priorities_attr", "severities_attr",
-                     "epic_custom_attributes_attr", "userstory_custom_attributes_attr",
-                     "task_custom_attributes_attr", "issue_custom_attributes_attr", "roles_attr"]:
+        for attr in ["epic_statuses_attr", "userstory_statuses_attr",
+                     "userstory_duedates_attr", "points_attr",
+                     "task_statuses_attr", "task_duedates_attr",
+                     "issue_statuses_attr", "issue_types_attr",
+                     "issue_duedates_attr", "priorities_attr",
+                     "severities_attr", "epic_custom_attributes_attr",
+                     "userstory_custom_attributes_attr",
+                     "task_custom_attributes_attr",
+                     "issue_custom_attributes_attr", "roles_attr"]:
 
             assert hasattr(instance, attr), "instance must have a {} attribute".format(attr)
             val = getattr(instance, attr)
@@ -462,10 +501,158 @@ class ProjectDetailSerializer(ProjectSerializer):
         return services.get_max_memberships_for_project(obj)
 
 
+class ProjectLightSerializer(serializers.LightSerializer):
+    id = Field()
+    name = Field()
+    slug = Field()
+    description = Field()
+    created_date = Field()
+    modified_date = Field()
+    owner = MethodField()
+    members = MethodField()
+    total_milestones = Field()
+    total_story_points = Field()
+    is_contact_activated = Field()
+    is_epics_activated = Field()
+    is_backlog_activated = Field()
+    is_kanban_activated = Field()
+    is_wiki_activated = Field()
+    is_issues_activated = Field()
+    videoconferences = Field()
+    videoconferences_extra_data = Field()
+    creation_template = Field(attr="creation_template_id")
+    is_private = Field()
+    anon_permissions = Field()
+    public_permissions = Field()
+    is_featured = Field()
+    is_looking_for_people = Field()
+    looking_for_people_note = Field()
+    blocked_code = Field()
+    totals_updated_datetime = Field()
+    total_fans = Field()
+    total_fans_last_week = Field()
+    total_fans_last_month = Field()
+    total_fans_last_year = Field()
+    total_activity = Field()
+    total_activity_last_week = Field()
+    total_activity_last_month = Field()
+    total_activity_last_year = Field()
+
+    tags = Field()
+    tags_colors = MethodField()
+
+    default_epic_status = Field(attr="default_epic_status_id")
+    default_points = Field(attr="default_points_id")
+    default_us_status = Field(attr="default_us_status_id")
+    default_task_status = Field(attr="default_task_status_id")
+    default_priority = Field(attr="default_priority_id")
+    default_severity = Field(attr="default_severity_id")
+    default_issue_status = Field(attr="default_issue_status_id")
+    default_issue_type = Field(attr="default_issue_type_id")
+
+    my_permissions = MethodField()
+
+    i_am_owner = MethodField()
+    i_am_admin = MethodField()
+    i_am_member = MethodField()
+
+    is_watcher = MethodField()
+    total_watchers = MethodField()
+
+    logo_small_url = MethodField()
+
+    is_fan = Field(attr="is_fan_attr")
+
+    my_homepage = MethodField()
+
+    def get_members(self, obj):
+        assert hasattr(obj, "members_attr"), "instance must have a members_attr attribute"
+        if obj.members_attr is None:
+            return []
+
+        return [m.get("id") for m in obj.members_attr if m["id"] is not None]
+
+    def get_i_am_member(self, obj):
+        assert hasattr(obj, "members_attr"), "instance must have a members_attr attribute"
+        if obj.members_attr is None:
+            return False
+
+        if "request" in self.context:
+            user = self.context["request"].user
+            user_ids = [m.get("id") for m in obj.members_attr if m["id"] is not None]
+            if not user.is_anonymous() and user.id in user_ids:
+                return True
+
+        return False
+
+    def get_tags_colors(self, obj):
+        return dict(obj.tags_colors)
+
+    def get_my_permissions(self, obj):
+        if "request" in self.context:
+            user = self.context["request"].user
+            return calculate_permissions(is_authenticated=user.is_authenticated(),
+                                         is_superuser=user.is_superuser,
+                                         is_member=self.get_i_am_member(obj),
+                                         is_admin=self.get_i_am_admin(obj),
+                                         role_permissions=obj.my_role_permissions_attr,
+                                         anon_permissions=obj.anon_permissions,
+                                         public_permissions=obj.public_permissions)
+        return []
+
+    def get_owner(self, obj):
+        return UserBasicInfoSerializer(obj.owner).data
+
+    def get_i_am_owner(self, obj):
+        if "request" in self.context:
+            return is_project_owner(self.context["request"].user, obj)
+        return False
+
+    def get_i_am_admin(self, obj):
+        if "request" in self.context:
+            return is_project_admin(self.context["request"].user, obj)
+        return False
+
+    def get_is_watcher(self, obj):
+        assert hasattr(obj, "notify_policies_attr"), "instance must have a notify_policies_attr attribute"
+        np = self.get_notify_level(obj)
+        return np is not None and np != NotifyLevel.none
+
+    def get_total_watchers(self, obj):
+        assert hasattr(obj, "notify_policies_attr"), "instance must have a notify_policies_attr attribute"
+        if obj.notify_policies_attr is None:
+            return 0
+
+        valid_notify_policies = [np for np in obj.notify_policies_attr if np["notify_level"] != NotifyLevel.none]
+        return len(valid_notify_policies)
+
+    def get_notify_level(self, obj):
+        assert hasattr(obj, "notify_policies_attr"), "instance must have a notify_policies_attr attribute"
+        if obj.notify_policies_attr is None:
+            return None
+
+        if "request" in self.context:
+            user = self.context["request"].user
+            for np in obj.notify_policies_attr:
+                if np["user_id"] == user.id:
+                    return np["notify_level"]
+
+        return None
+
+    def get_logo_small_url(self, obj):
+        return services.get_logo_small_thumbnail_url(obj)
+
+    def get_my_homepage(self, obj):
+        assert hasattr(obj, "my_homepage_attr"), "instance must have a my_homepage_attr attribute"
+        if obj.my_homepage_attr is None:
+            return False
+
+        return obj.my_homepage_attr
+
+
 ######################################################
 # Project Templates
 ######################################################
-
 class ProjectTemplateSerializer(serializers.LightSerializer):
     id = Field()
     name = I18NField()

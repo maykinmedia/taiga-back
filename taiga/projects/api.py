@@ -45,6 +45,7 @@ from taiga.projects.epics.models import Epic
 from taiga.projects.history.mixins import HistoryResourceMixin
 from taiga.projects.issues.models import Issue
 from taiga.projects.likes.mixins.viewsets import LikedResourceMixin, FansViewSetMixin
+from taiga.projects.notifications.apps import signal_members_added
 from taiga.projects.notifications.mixins import WatchersViewSetMixin
 from taiga.projects.notifications.choices import NotifyLevel
 from taiga.projects.mixins.on_destroy import MoveOnDestroyMixin
@@ -112,8 +113,10 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
             qs = project_utils.attach_notify_policies(qs)
             qs = project_utils.attach_is_fan(qs, user=self.request.user)
             qs = project_utils.attach_my_role_permissions(qs, user=self.request.user)
-            qs = project_utils.attach_my_role_permissions(qs, user=self.request.user)
             qs = project_utils.attach_closed_milestones(qs)
+            qs = project_utils.attach_my_homepage(qs, user=self.request.user)
+        elif self.request.QUERY_PARAMS.get('slight', False):
+            qs = project_utils.attach_basic_info(qs, user=self.request.user)
         else:
             qs = project_utils.attach_extra_info(qs, user=self.request.user)
 
@@ -136,12 +139,29 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
         return qs
 
     def retrieve(self, request, *args, **kwargs):
+        qs = self.get_queryset()
         if self.action == "by_slug":
             self.lookup_field = "slug"
+            # If we retrieve the project by slug we want to filter by user the
+            # permissions and return 404 in case the user don't have access
+            flt = filters.get_filter_expression_can_view_projects(
+                self.request.user)
 
-        return super().retrieve(request, *args, **kwargs)
+            qs = qs.filter(flt)
+
+        self.object = get_object_or_404(qs, **kwargs)
+
+        self.check_permissions(request, 'retrieve', self.object)
+
+        if self.object is None:
+            raise Http404
+
+        serializer = self.get_serializer(self.object)
+        return response.Ok(serializer.data)
 
     def get_serializer_class(self):
+        if self.action == "list" and self.request.QUERY_PARAMS.get('slight', False):
+            return serializers.ProjectLightSerializer
         if self.action == "list":
             return serializers.ProjectSerializer
 
@@ -259,6 +279,11 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
         project.save()
         return uuid_value
 
+    def _delete_csv_uuid(self, project, field):
+        setattr(project, field, None)
+        project.save()
+        return getattr(project, field)
+
     @detail_route(methods=["POST"])
     def regenerate_epics_csv_uuid(self, request, pk=None):
         project = self.get_object()
@@ -289,6 +314,38 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
         self.check_permissions(request, "regenerate_issues_csv_uuid", project)
         self.pre_conditions_on_save(project)
         data = {"uuid": self._regenerate_csv_uuid(project, "issues_csv_uuid")}
+        return response.Ok(data)
+
+    @detail_route(methods=["POST"])
+    def delete_epics_csv_uuid(self, request, pk=None):
+        project = self.get_object()
+        self.check_permissions(request, "delete_epics_csv_uuid", project)
+        self.pre_conditions_on_save(project)
+        data = {"uuid": self._delete_csv_uuid(project, "epics_csv_uuid")}
+        return response.Ok(data)
+
+    @detail_route(methods=["POST"])
+    def delete_userstories_csv_uuid(self, request, pk=None):
+        project = self.get_object()
+        self.check_permissions(request, "delete_userstories_csv_uuid", project)
+        self.pre_conditions_on_save(project)
+        data = {"uuid": self._delete_csv_uuid(project, "userstories_csv_uuid")}
+        return response.Ok(data)
+
+    @detail_route(methods=["POST"])
+    def delete_tasks_csv_uuid(self, request, pk=None):
+        project = self.get_object()
+        self.check_permissions(request, "delete_tasks_csv_uuid", project)
+        self.pre_conditions_on_save(project)
+        data = {"uuid": self._delete_csv_uuid(project, "tasks_csv_uuid")}
+        return response.Ok(data)
+
+    @detail_route(methods=["POST"])
+    def delete_issues_csv_uuid(self, request, pk=None):
+        project = self.get_object()
+        self.check_permissions(request, "delete_issues_csv_uuid", project)
+        self.pre_conditions_on_save(project)
+        data = {"uuid": self._delete_csv_uuid(project, "issues_csv_uuid")}
         return response.Ok(data)
 
     @list_route(methods=["GET"])
@@ -570,6 +627,60 @@ class PointsViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
             return super().create(request, *args, **kwargs)
 
 
+class UserStoryDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
+
+    model = models.UserStoryDueDate
+    serializer_class = serializers.UserStoryDueDateSerializer
+    validator_class = validators.UserStoryDueDateValidator
+    permission_classes = (permissions.UserStoryDueDatePermission,)
+    filter_backends = (filters.CanViewProjectFilterBackend,)
+    filter_fields = ('project',)
+
+    def create(self, request, *args, **kwargs):
+        project_id = request.DATA.get("project", 0)
+        with advisory_lock("user-story-due-date-creation-{}".format(project_id)):
+            return super().create(request, *args, **kwargs)
+
+    def pre_delete(self, obj):
+        if obj.by_default:
+            raise exc.BadRequest(
+                _("You can't delete user story due date by default"))
+
+    @list_route(methods=["POST"])
+    def create_default(self, request, **kwargs):
+        context = {
+            "request": request
+        }
+        validator = validators.DueDatesCreationValidator(data=request.DATA,
+                                                         context=context)
+        if not validator.is_valid():
+            return response.BadRequest(validator.errors)
+
+        project_id = request.DATA.get('project_id')
+        project = models.Project.objects.get(id=project_id)
+
+        if project.us_duedates.all():
+            raise exc.BadRequest(_("Project already have due dates"))
+
+        project_template = models.ProjectTemplate.objects.get(
+            id=project.creation_template.id)
+
+        for us_duedate in project_template.us_duedates:
+            models.UserStoryDueDate.objects.create(
+                name=us_duedate["name"],
+                by_default=us_duedate["by_default"],
+                color=us_duedate["color"],
+                days_to_due=us_duedate["days_to_due"],
+                order=us_duedate["order"],
+                project=project
+            )
+        project.save()
+
+        serializer = self.get_serializer(project.us_duedates.all(), many=True)
+
+        return response.Ok(serializer.data)
+
+
 class TaskStatusViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
                         ModelCrudViewSet, BulkUpdateOrderMixin):
 
@@ -590,6 +701,61 @@ class TaskStatusViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
         project_id = request.DATA.get("project", 0)
         with advisory_lock("task-status-creation-{}".format(project_id)):
             return super().create(request, *args, **kwargs)
+
+
+class TaskDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
+
+    model = models.TaskDueDate
+    serializer_class = serializers.TaskDueDateSerializer
+    validator_class = validators.TaskDueDateValidator
+    permission_classes = (permissions.TaskDueDatePermission,)
+    filter_backends = (filters.CanViewProjectFilterBackend,)
+    filter_fields = ('project',)
+
+    def create(self, request, *args, **kwargs):
+        project_id = request.DATA.get("project", 0)
+        with advisory_lock("task-due-date-creation-{}".format(project_id)):
+            return super().create(request, *args, **kwargs)
+
+    def pre_delete(self, obj):
+        if obj.by_default:
+            raise exc.BadRequest(
+                _("You can't delete task due date by default"))
+
+    @list_route(methods=["POST"])
+    def create_default(self, request, **kwargs):
+        context = {
+            "request": request
+        }
+        validator = validators.DueDatesCreationValidator(data=request.DATA,
+                                                         context=context)
+        if not validator.is_valid():
+            return response.BadRequest(validator.errors)
+
+        project_id = request.DATA.get('project_id')
+        project = models.Project.objects.get(id=project_id)
+
+        if project.task_duedates.all():
+            raise exc.BadRequest(_("Project already have task due dates"))
+
+        project_template = models.ProjectTemplate.objects.get(
+            id=project.creation_template.id)
+
+        for task_duedate in project_template.task_duedates:
+            models.TaskDueDate.objects.create(
+                name=task_duedate["name"],
+                by_default=task_duedate["by_default"],
+                color=task_duedate["color"],
+                days_to_due=task_duedate["days_to_due"],
+                order=task_duedate["order"],
+                project=project
+            )
+        project.save()
+
+        serializer = self.get_serializer(project.task_duedates.all(),
+                                         many=True)
+
+        return response.Ok(serializer.data)
 
 
 class SeverityViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
@@ -675,6 +841,61 @@ class IssueStatusViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
         project_id = request.DATA.get("project", 0)
         with advisory_lock("issue-status-creation-{}".format(project_id)):
             return super().create(request, *args, **kwargs)
+
+
+class IssueDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
+
+    model = models.IssueDueDate
+    serializer_class = serializers.IssueDueDateSerializer
+    validator_class = validators.IssueDueDateValidator
+    permission_classes = (permissions.IssueDueDatePermission,)
+    filter_backends = (filters.CanViewProjectFilterBackend,)
+    filter_fields = ('project',)
+
+    def create(self, request, *args, **kwargs):
+        project_id = request.DATA.get("project", 0)
+        with advisory_lock("issue-due-date-creation-{}".format(project_id)):
+            return super().create(request, *args, **kwargs)
+
+    def pre_delete(self, obj):
+        if obj.by_default:
+            raise exc.BadRequest(
+                _("You can't delete issue due date by default"))
+
+    @list_route(methods=["POST"])
+    def create_default(self, request, **kwargs):
+        context = {
+            "request": request
+        }
+        validator = validators.DueDatesCreationValidator(data=request.DATA,
+                                                         context=context)
+        if not validator.is_valid():
+            return response.BadRequest(validator.errors)
+
+        project_id = request.DATA.get('project_id')
+        project = models.Project.objects.get(id=project_id)
+
+        if project.issue_duedates.all():
+            raise exc.BadRequest(_("Project already have issue due dates"))
+
+        project_template = models.ProjectTemplate.objects.get(
+            id=project.creation_template.id)
+
+        for issue_duedate in project_template.issue_duedates:
+            models.IssueDueDate.objects.create(
+                name=issue_duedate["name"],
+                by_default=issue_duedate["by_default"],
+                color=issue_duedate["color"],
+                days_to_due=issue_duedate["days_to_due"],
+                order=issue_duedate["order"],
+                project=project
+            )
+        project.save()
+
+        serializer = self.get_serializer(project.issue_duedates.all(),
+                                         many=True)
+
+        return response.Ok(serializer.data)
 
 
 ######################################################
@@ -764,6 +985,10 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
                                                           invitation_extra_text=invitation_extra_text,
                                                           callback=self.post_save,
                                                           precall=self.pre_save)
+                signal_members_added.send(sender=self.__class__,
+                                          user=self.request.user,
+                                          project=project,
+                                          new_members=members)
         except exc.ValidationError as err:
             return response.BadRequest(err.message_dict)
 
@@ -778,6 +1003,38 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
         self.pre_conditions_on_save(invitation)
 
         services.send_invitation(invitation=invitation)
+        return response.NoContent()
+
+    @list_route(methods=["POST"])
+    def remove_user_from_all_my_projects(self, request, **kwargs):
+        private_only = request.DATA.get('private_only', False)
+
+        user_id = request.DATA.get('user', None)
+        if user_id is None:
+            raise exc.WrongArguments(_("Invalid user id"))
+
+        user_model = apps.get_model("users", "User")
+        try:
+            user = user_model.objects.get(id=user_id)
+        except user_model.DoesNotExist:
+            return response.BadRequest(_("The user doesn't exist"))
+
+        memberships = models.Membership.objects.filter(project__owner=request.user, user=user)
+        if private_only:
+            memberships = memberships.filter(project__is_private=True)
+
+        errors = []
+        for membership in memberships:
+            if not services.can_user_leave_project(user, membership.project):
+                errors.append(membership.project.name)
+
+        if len(errors) > 0:
+            error = _("This user can't be removed from the following projects, because would "
+                      "leave them without any active admin: {}.".format(", ".join(errors)))
+            return response.BadRequest(error)
+
+        memberships.delete()
+
         return response.NoContent()
 
     def pre_delete(self, obj):

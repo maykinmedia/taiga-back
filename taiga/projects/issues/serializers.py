@@ -21,6 +21,8 @@ from taiga.base.fields import Field, MethodField
 from taiga.base.neighbors import NeighborsSerializerMixin
 
 from taiga.mdrender.service import render as mdrender
+from taiga.projects.attachments.serializers import BasicAttachmentsInfoSerializerMixin
+from taiga.projects.due_dates.serializers import DueDateSerializerMixin
 from taiga.projects.mixins.serializers import OwnerExtraInfoSerializerMixin
 from taiga.projects.mixins.serializers import ProjectExtraInfoSerializerMixin
 from taiga.projects.mixins.serializers import AssignedToExtraInfoSerializerMixin
@@ -33,6 +35,7 @@ from taiga.projects.votes.mixins.serializers import VoteResourceSerializerMixin
 class IssueListSerializer(VoteResourceSerializerMixin, WatchedResourceSerializer,
                           OwnerExtraInfoSerializerMixin, AssignedToExtraInfoSerializerMixin,
                           StatusExtraInfoSerializerMixin, ProjectExtraInfoSerializerMixin,
+                          BasicAttachmentsInfoSerializerMixin, DueDateSerializerMixin,
                           TaggedInProjectResourceSerializer, serializers.LightSerializer):
     id = Field()
     ref = Field()
@@ -65,7 +68,8 @@ class IssueSerializer(IssueListSerializer):
         return ""
 
     def get_generated_user_stories(self, obj):
-        assert hasattr(obj, "generated_user_stories_attr"), "instance must have a generated_user_stories_attr attribute"
+        assert hasattr(obj, "generated_user_stories_attr"),\
+            "instance must have a generated_user_stories_attr attribute"
         return obj.generated_user_stories_attr
 
     def get_blocked_note_html(self, obj):

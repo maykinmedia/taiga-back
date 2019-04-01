@@ -28,9 +28,12 @@ from taiga.base.api.mixins import BlockedByProjectMixin
 from taiga.base.api.utils import get_object_or_404
 
 from taiga.projects.history.mixins import HistoryResourceMixin
+from taiga.projects.milestones.models import Milestone
 from taiga.projects.mixins.by_ref import ByRefMixin
 from taiga.projects.models import Project, IssueStatus, Severity, Priority, IssueType
-from taiga.projects.notifications.mixins import WatchedResourceMixin, WatchersViewSetMixin
+from taiga.projects.notifications.mixins import AssignedToSignalMixin
+from taiga.projects.notifications.mixins import WatchedResourceMixin
+from taiga.projects.notifications.mixins import WatchersViewSetMixin
 from taiga.projects.occ import OCCResourceMixin
 from taiga.projects.tagging.api import TaggedResourceMixin
 from taiga.projects.votes.mixins.viewsets import VotedResourceMixin, VotersViewSetMixin
@@ -44,12 +47,15 @@ from . import serializers
 from . import validators
 
 
-class IssueViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, WatchedResourceMixin,
-                   ByRefMixin, TaggedResourceMixin, BlockedByProjectMixin, ModelCrudViewSet):
+class IssueViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
+                   HistoryResourceMixin, WatchedResourceMixin, ByRefMixin,
+                   TaggedResourceMixin, BlockedByProjectMixin,
+                   ModelCrudViewSet):
     validator_class = validators.IssueValidator
     queryset = models.Issue.objects.all()
     permission_classes = (permissions.IssuePermission, )
     filter_backends = (filters.CanViewIssuesFilterBackend,
+                       filters.RoleFilter,
                        filters.OwnersFilter,
                        filters.AssignedToFilter,
                        filters.StatusesFilter,
@@ -63,10 +69,12 @@ class IssueViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, W
                        filters.ModifiedDateFilter,
                        filters.FinishedDateFilter,
                        filters.OrderByFilterMixin)
-    filter_fields = ("project",
+    filter_fields = ("milestone",
+                     "project",
                      "project__slug",
                      "status__is_closed")
     order_by_fields = ("type",
+                       "project",
                        "status",
                        "severity",
                        "priority",
@@ -143,7 +151,11 @@ class IssueViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, W
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.select_related("owner", "assigned_to", "status", "project")
-        qs = attach_extra_info(qs, user=self.request.user)
+
+        include_attachments = "include_attachments" in self.request.QUERY_PARAMS
+        qs = attach_extra_info(qs, user=self.request.user,
+                               include_attachments=include_attachments)
+
         return qs
 
     def pre_save(self, obj):
@@ -187,6 +199,7 @@ class IssueViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, W
         owners_filter_backends = (f for f in filter_backends if f != filters.OwnersFilter)
         priorities_filter_backends = (f for f in filter_backends if f != filters.PrioritiesFilter)
         severities_filter_backends = (f for f in filter_backends if f != filters.SeveritiesFilter)
+        roles_filter_backends = (f for f in filter_backends if f != filters.RoleFilter)
 
         queryset = self.get_queryset()
         querysets = {
@@ -196,7 +209,8 @@ class IssueViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, W
             "owners": self.filter_queryset(queryset, filter_backends=owners_filter_backends),
             "priorities": self.filter_queryset(queryset, filter_backends=priorities_filter_backends),
             "severities": self.filter_queryset(queryset, filter_backends=severities_filter_backends),
-            "tags": self.filter_queryset(queryset)
+            "tags": self.filter_queryset(queryset),
+            "roles": self.filter_queryset(queryset, filter_backends=roles_filter_backends),
         }
         return response.Ok(services.get_issues_filters_data(project, querysets))
 
@@ -224,9 +238,12 @@ class IssueViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, W
                 raise exc.Blocked(_("Blocked element"))
 
             issues = services.create_issues_in_bulk(
-                data["bulk_issues"], project=project, owner=request.user,
-                status=project.default_issue_status, severity=project.default_severity,
-                priority=project.default_priority, type=project.default_issue_type,
+                data["bulk_issues"], milestone_id=data["milestone_id"],
+                project=project, owner=request.user,
+                status=project.default_issue_status,
+                severity=project.default_severity,
+                priority=project.default_priority,
+                type=project.default_issue_type,
                 callback=self.post_save, precall=self.pre_save)
 
             issues = self.get_queryset().filter(id__in=[i.id for i in issues])
@@ -235,6 +252,22 @@ class IssueViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, W
             return response.Ok(data=issues_serialized.data)
 
         return response.BadRequest(validator.errors)
+
+    @list_route(methods=["POST"])
+    def bulk_update_milestone(self, request, **kwargs):
+        validator = validators.UpdateMilestoneBulkValidator(data=request.DATA)
+        if not validator.is_valid():
+            return response.BadRequest(validator.errors)
+
+        data = validator.data
+        project = get_object_or_404(Project, pk=data["project_id"])
+        milestone = get_object_or_404(Milestone, pk=data["milestone_id"])
+
+        self.check_permissions(request, "bulk_update_milestone", project)
+
+        ret = services.update_issues_milestone_in_bulk(data["bulk_issues"], milestone)
+
+        return response.Ok(ret)
 
 
 class IssueVotersViewSet(VotersViewSetMixin, ModelListViewSet):
