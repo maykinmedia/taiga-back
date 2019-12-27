@@ -510,8 +510,8 @@ def test_update_userstory_points(client):
     points2 = f.PointsFactory.create(project=project, value=1)
     points3 = f.PointsFactory.create(project=project, value=2)
 
-    us = f.UserStoryFactory.create(project=project, owner=user1, status__project=project,
-                                   milestone__project=project)
+    us = f.create_userstory(project=project, owner=user1, status__project=project,
+                            milestone__project=project)
 
     url = reverse("userstories-detail", args=[us.pk])
 
@@ -762,18 +762,20 @@ def test_api_filter_by_finish_date(client):
 def test_api_filter_by_assigned_users(client):
     user = f.UserFactory(is_superuser=True)
     user2 = f.UserFactory(is_superuser=True)
+    project = f.ProjectFactory.create(owner=user)
 
-    userstory = f.create_userstory(owner=user, subject="test 2 users",
-                                   assigned_to=user,
-                                   assigned_users=[user.id, user2.id])
+    f.MembershipFactory.create(user=user, project=project)
+
+    f.create_userstory(owner=user, subject="test 2 users", assigned_to=user,
+                       assigned_users=[user.id, user2.id], project=project)
     f.create_userstory(
         owner=user, subject="test 1 user", assigned_to=user,
-        assigned_users=[user.id]
+        assigned_users=[user.id], project=project
     )
 
     url = reverse("userstories-list") + "?assigned_users=%s" % (user.id)
 
-    client.login(userstory.owner)
+    client.login(user)
     response = client.get(url)
     number_of_userstories = len(response.data)
 
@@ -915,11 +917,11 @@ def test_api_filters_data(client):
     response = client.get(url + "&tags={},{}&owner={},{}".format(tag1, tag2, user1.id, user2.id))
     assert response.status_code == 200
 
-    assert next(filter(lambda i: i['id'] == user1.id, response.data["owners"]))["count"] == 1
-    assert next(filter(lambda i: i['id'] == user2.id, response.data["owners"]))["count"] == 1
-    assert next(filter(lambda i: i['id'] == user3.id, response.data["owners"]))["count"] == 1
+    assert next(filter(lambda i: i['id'] == user1.id, response.data["owners"]))["count"] == 2
+    assert next(filter(lambda i: i['id'] == user2.id, response.data["owners"]))["count"] == 2
+    assert next(filter(lambda i: i['id'] == user3.id, response.data["owners"]))["count"] == 2
 
-    assert next(filter(lambda i: i['id'] is None, response.data["assigned_to"]))["count"] == 0
+    assert next(filter(lambda i: i['id'] is None, response.data["assigned_to"]))["count"] == 2
     assert next(filter(lambda i: i['id'] == user1.id, response.data["assigned_to"]))["count"] == 2
     assert next(filter(lambda i: i['id'] == user2.id, response.data["assigned_to"]))["count"] == 0
     assert next(filter(lambda i: i['id'] == user3.id, response.data["assigned_to"]))["count"] == 0
@@ -927,15 +929,15 @@ def test_api_filters_data(client):
     assert next(filter(lambda i: i['id'] == status0.id, response.data["statuses"]))["count"] == 1
     assert next(filter(lambda i: i['id'] == status1.id, response.data["statuses"]))["count"] == 0
     assert next(filter(lambda i: i['id'] == status2.id, response.data["statuses"]))["count"] == 0
-    assert next(filter(lambda i: i['id'] == status3.id, response.data["statuses"]))["count"] == 1
+    assert next(filter(lambda i: i['id'] == status3.id, response.data["statuses"]))["count"] == 3
 
-    assert next(filter(lambda i: i['name'] == tag0, response.data["tags"]))["count"] == 0
-    assert next(filter(lambda i: i['name'] == tag1, response.data["tags"]))["count"] == 2
-    assert next(filter(lambda i: i['name'] == tag2, response.data["tags"]))["count"] == 2
-    assert next(filter(lambda i: i['name'] == tag3, response.data["tags"]))["count"] == 1
+    assert next(filter(lambda i: i['name'] == tag0, response.data["tags"]))["count"] == 1
+    assert next(filter(lambda i: i['name'] == tag1, response.data["tags"]))["count"] == 3
+    assert next(filter(lambda i: i['name'] == tag2, response.data["tags"]))["count"] == 3
+    assert next(filter(lambda i: i['name'] == tag3, response.data["tags"]))["count"] == 3
 
-    assert next(filter(lambda i: i['id'] is None, response.data["epics"]))["count"] == 0
-    assert next(filter(lambda i: i['id'] == epic0.id, response.data["epics"]))["count"] == 2
+    assert next(filter(lambda i: i['id'] is None, response.data["epics"]))["count"] == 1
+    assert next(filter(lambda i: i['id'] == epic0.id, response.data["epics"]))["count"] == 3
     assert next(filter(lambda i: i['id'] == epic1.id, response.data["epics"]))["count"] == 0
     assert next(filter(lambda i: i['id'] == epic2.id, response.data["epics"]))["count"] == 1
 
@@ -993,10 +995,25 @@ def test_api_filters(client, filter_name, collection, expected, exclude_expected
     assert len(response.data) == expected
 
     # exclude test
-    url = "{}?project={}&exclude_{}={}".format(reverse('userstories-list'), project.id, filter_name, param)
+    url = "{}?project={}&exclude_{}={}".format(reverse('userstories-list'), project.id,
+                                               filter_name, param)
     response = client.get(url)
     assert response.status_code == 200
     assert len(response.data) == exclude_expected
+
+
+def test_api_filters_tags_or_operator(client):
+    data = create_uss_fixtures()
+    project = data["project"]
+    client.login(data["users"][0])
+    tags = data["tags"]
+
+    url = "{}?project={}&tags={},{}".format(reverse('userstories-list'), project.id, tags[0],
+                                            tags[2])
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert len(response.data) == 5
 
 
 def test_api_filters_data_with_assigned_users(client):
@@ -1095,13 +1112,13 @@ def test_api_filters_data_roles_with_assigned_users(client):
     # | 2     |  user1 | user1       | user1          | role1        |
     # ----------------------------------------------------------------
 
-    us0 = f.UserStoryFactory.create(project=project, owner=user2,
+    us0 = f.UserStoryFactory.create(project=project, owner=user2, status__project=project,
                                     assigned_to=user2,
                                     assigned_users=[user2, user3],)
     f.RelatedUserStory.create(user_story=us0)
-    us1 = f.UserStoryFactory.create(project=project, owner=user1,
+    us1 = f.UserStoryFactory.create(project=project, owner=user1, status__project=project,
                                     assigned_to=None)
-    us2 = f.UserStoryFactory.create(project=project, owner=user1,
+    us2 = f.UserStoryFactory.create(project=project, owner=user1, status__project=project,
                                     assigned_to=user1,
                                     assigned_users=[user1],)
 
@@ -1409,3 +1426,42 @@ def test_api_validator_assigned_to_when_create_userstories(client):
 
         response = client.json.post(url, json.dumps(data))
         assert response.status_code == 400, response.data
+
+
+def test_update_userstory_backlog_order(client):
+    user1 = f.UserFactory.create()
+    project = f.create_project(owner=user1)
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    us1 = f.create_userstory(project=project, owner=user1, status__project=project, milestone=None, backlog_order=0)
+    us2 = f.create_userstory(project=project, owner=user1, status__project=project, milestone=None, backlog_order=1)
+    us3 = f.create_userstory(project=project, owner=user1, status__project=project, milestone=None, backlog_order=2)
+    us4 = f.create_userstory(project=project, owner=user1, status__project=project, milestone=None, backlog_order=3)
+    url = reverse("userstories-detail", args=[us4.pk])
+
+    data = {
+        "version": us4.version,
+        "backlog_order": 1
+    }
+
+    client.login(project.owner)
+
+    response = client.json.patch(url, json.dumps(data))
+    assert response.status_code == 200, response.data
+    assert 1 == response.data['backlog_order']
+
+    url = reverse("userstories-list") + "?milestone=null&project={}".format(project.id)
+    client.login(project.owner)
+    response = client.get(url)
+    user_stories = response.data
+    number_of_stories = len(user_stories)
+
+    assert response.status_code == 200
+    assert number_of_stories == 4, number_of_stories
+    assert 0 == user_stories[0]["backlog_order"]
+    assert us1.id == user_stories[0]["id"]
+    assert us4.id == user_stories[1]["id"]
+    assert 1 == user_stories[1]["backlog_order"]
+    assert us2.id == user_stories[2]["id"]
+    assert 2 == user_stories[2]["backlog_order"]
+    assert us3.id == user_stories[3]["id"]
+    assert 3 == user_stories[3]["backlog_order"]

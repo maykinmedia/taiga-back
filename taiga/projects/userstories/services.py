@@ -292,6 +292,8 @@ def userstories_to_csv(project, queryset):
         row['total-points'] = us.get_total_points()
 
         for custom_attr in custom_attrs:
+            if not hasattr(us, "custom_attributes_values"):
+                continue
             value = us.custom_attributes_values.attributes_values.get(
                 str(custom_attr.id), None)
             row[custom_attr.name] = value
@@ -320,6 +322,8 @@ def _get_userstories_statuses(project, queryset):
                       ON ("userstories_userstory"."project_id" = "projects_project"."id")
          LEFT OUTER JOIN "epics_relateduserstory"
                       ON "userstories_userstory"."id" = "epics_relateduserstory"."user_story_id"
+         LEFT OUTER JOIN "userstories_userstory_assigned_users"
+                      ON "userstories_userstory"."id" = "userstories_userstory_assigned_users"."userstory_id"
                    WHERE {where}
             ),
              "counters" AS (
@@ -370,8 +374,12 @@ def _get_userstories_assigned_to(project, queryset):
                     FROM "userstories_userstory"
               INNER JOIN "projects_project"
                       ON ("userstories_userstory"."project_id" = "projects_project"."id")
+                INNER JOIN "projects_userstorystatus"
+                    ON ("userstories_userstory"."status_id" = "projects_userstorystatus"."id")
          LEFT OUTER JOIN "epics_relateduserstory"
                       ON "userstories_userstory"."id" = "epics_relateduserstory"."user_story_id"
+         LEFT OUTER JOIN "userstories_userstory_assigned_users"
+                      ON "userstories_userstory"."id" = "userstories_userstory_assigned_users"."userstory_id"
                    WHERE {where}
             ),
 
@@ -403,8 +411,12 @@ def _get_userstories_assigned_to(project, queryset):
                    FROM "userstories_userstory"
              INNER JOIN "projects_project"
                      ON ("userstories_userstory"."project_id" = "projects_project"."id")
+             INNER JOIN "projects_userstorystatus"
+                    ON ("userstories_userstory"."status_id" = "projects_userstorystatus"."id")
         LEFT OUTER JOIN "epics_relateduserstory"
                      ON ("userstories_userstory"."id" = "epics_relateduserstory"."user_story_id")
+        LEFT OUTER JOIN "userstories_userstory_assigned_users"
+                      ON "userstories_userstory"."id" = "userstories_userstory_assigned_users"."userstory_id"
                   WHERE {where} AND "userstories_userstory"."assigned_to_id" IS NULL
                GROUP BY "assigned_to_id"
     """.format(where=where)
@@ -452,6 +464,8 @@ def _get_userstories_assigned_users(project, queryset):
                       ON "userstories_userstory_assigned_users"."userstory_id" = "userstories_userstory"."id"
               INNER JOIN "projects_project"
                       ON ("userstories_userstory"."project_id" = "projects_project"."id")
+                INNER JOIN "projects_userstorystatus"
+                    ON ("userstories_userstory"."status_id" = "projects_userstorystatus"."id")
               LEFT OUTER JOIN "epics_relateduserstory"
                       ON "userstories_userstory"."id" = "epics_relateduserstory"."user_story_id"
                    WHERE {where}
@@ -485,6 +499,8 @@ def _get_userstories_assigned_users(project, queryset):
                    FROM "userstories_userstory"
              INNER JOIN "projects_project"
                      ON ("userstories_userstory"."project_id" = "projects_project"."id")
+            INNER JOIN "projects_userstorystatus"
+                ON ("userstories_userstory"."status_id" = "projects_userstorystatus"."id")
         LEFT OUTER JOIN "epics_relateduserstory"
                      ON ("userstories_userstory"."id" = "epics_relateduserstory"."user_story_id")
                   WHERE {where} AND "userstories_userstory"."id" NOT IN (
@@ -534,8 +550,12 @@ def _get_userstories_owners(project, queryset):
                     FROM "userstories_userstory"
               INNER JOIN "projects_project"
                       ON ("userstories_userstory"."project_id" = "projects_project"."id")
+                INNER JOIN "projects_userstorystatus"
+                    ON ("userstories_userstory"."status_id" = "projects_userstorystatus"."id")
          LEFT OUTER JOIN "epics_relateduserstory"
                       ON ("userstories_userstory"."id" = "epics_relateduserstory"."user_story_id")
+         LEFT OUTER JOIN "userstories_userstory_assigned_users"
+                      ON "userstories_userstory"."id" = "userstories_userstory_assigned_users"."userstory_id"
                    WHERE {where}
             ),
 
@@ -593,19 +613,23 @@ def _get_userstories_tags(project, queryset):
 
     extra_sql = """
            WITH "userstories_tags" AS (
-                       SELECT "tag",
-                              COUNT("tag") "counter"
-                         FROM (
-                          SELECT DISTINCT "userstories_userstory"."id" "us_id",
-                                           UNNEST("userstories_userstory"."tags") "tag"
-                                     FROM "userstories_userstory"
-                               INNER JOIN "projects_project"
-                                       ON ("userstories_userstory"."project_id" = "projects_project"."id")
-                          LEFT OUTER JOIN "epics_relateduserstory"
-                                       ON ("userstories_userstory"."id" = "epics_relateduserstory"."user_story_id")
-                                    WHERE {where}
-                              ) "tags"
-                     GROUP BY "tag"),
+                   SELECT "tag",
+                          COUNT("tag") "counter"
+                     FROM (
+                      SELECT DISTINCT "userstories_userstory"."id" "us_id",
+                                       UNNEST("userstories_userstory"."tags") "tag"
+                                 FROM "userstories_userstory"
+                        INNER JOIN "projects_project"
+                            ON ("userstories_userstory"."project_id" = "projects_project"."id")
+                        INNER JOIN "projects_userstorystatus"
+                            ON ("userstories_userstory"."status_id" = "projects_userstorystatus"."id")
+                        LEFT OUTER JOIN "epics_relateduserstory"
+                            ON ("userstories_userstory"."id" = "epics_relateduserstory"."user_story_id")
+                        LEFT OUTER JOIN "userstories_userstory_assigned_users"
+                            ON "userstories_userstory"."id" = "userstories_userstory_assigned_users"."userstory_id"
+                                WHERE {where}
+                          ) "tags"
+                    GROUP BY "tag"),
 
                 "project_tags" AS (
                        SELECT reduce_dim("tags_colors") "tag_color"
@@ -649,6 +673,10 @@ def _get_userstories_epics(project, queryset):
                    ON ("userstories_userstory"."id" = "epics_relateduserstory"."user_story_id")
            INNER JOIN "projects_project"
                    ON ("userstories_userstory"."project_id" = "projects_project"."id")
+            INNER JOIN "projects_userstorystatus"
+                    ON ("userstories_userstory"."status_id" = "projects_userstorystatus"."id")
+            LEFT OUTER JOIN "userstories_userstory_assigned_users"
+                ON "userstories_userstory"."id" = "userstories_userstory_assigned_users"."userstory_id"
                 WHERE {where}
              GROUP BY "epics_relateduserstory"."epic_id"
        )
@@ -664,6 +692,10 @@ def _get_userstories_epics(project, queryset):
                    ON ("epics_relateduserstory"."user_story_id" = "userstories_userstory"."id")
            INNER JOIN "projects_project"
                    ON ("userstories_userstory"."project_id" = "projects_project"."id")
+            INNER JOIN "projects_userstorystatus"
+                ON ("userstories_userstory"."status_id" = "projects_userstorystatus"."id")
+         LEFT OUTER JOIN "userstories_userstory_assigned_users"
+                      ON "userstories_userstory"."id" = "userstories_userstory_assigned_users"."userstory_id"
                 WHERE {where} AND "epics_relateduserstory"."epic_id" IS NULL
              GROUP BY "epics_relateduserstory"."epic_id"
 
@@ -722,6 +754,8 @@ def _get_userstories_roles(project, queryset):
                     FROM "userstories_userstory"
               INNER JOIN "projects_project"
                       ON ("userstories_userstory"."project_id" = "projects_project"."id")
+            INNER JOIN "projects_userstorystatus"
+                ON ("userstories_userstory"."status_id" = "projects_userstorystatus"."id")
          LEFT OUTER JOIN "epics_relateduserstory"
                       ON "userstories_userstory"."id" = "epics_relateduserstory"."user_story_id"
          LEFT OUTER JOIN "userstories_userstory_assigned_users"

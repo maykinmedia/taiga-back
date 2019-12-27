@@ -2,6 +2,81 @@
 
 ## Unreleased
 
+## 5.0.0 (2019-11-13)
+
+- Refresh attachment URL on markdown fields to support protected backend.
+
+- Update requirements.
+
+- Update translations: Persian (Iran), French, Portuguese (Brazil).
+
+## 4.2.14 (2019-10-01)
+
+- Update requirements to support python3.7. This is a potentially BREAKING
+  CHANGE. Several libraries were updated to minor and patch releases.
+  Contributed modules should be tested thoroughly.
+
+- Minor bug fixes.
+
+## 4.2.12 (2019-08-06)
+
+### Misc
+
+- Upgrade requirements
+- Events refactoring
+
+## 4.2.11 (2019-07-24)
+
+### Misc
+
+- Asana bug fix.
+
+## 4.2.10 (2019-07-11)
+
+### Misc
+
+- Remove role points project signal from patch US's.
+- Improve US's statuses filter by project.
+
+
+## 4.2.7 (2019-06-24)
+
+### Misc
+
+- Add default settings slug configuration.
+- Minor bug fixes.
+
+## 4.2.6 (2019-06-12)
+
+### Misc
+
+- Recreate timeline indexes.
+- Minor bug fixes.
+
+
+## 4.2.4 / 4.2.5 (2019-05-09)
+
+### Misc
+
+- Fix epics excluded filter (https://tree.taiga.io/project/taiga/issue/5727)
+- Avoid saving non integer user id's in history diffs
+- Upgrade requests dependence
+
+
+## 4.2.3 (2019-04-16)
+
+### Features:
+
+- Change tag filter behavour to 'or' operator
+
+### Misc
+
+- Change milestone query
+- Avoid getting non image thumbnails
+- Remove unnecesary queries on saving items
+- Update messages catalog
+- Minor bug fixes.
+
 ## 4.2.2 (2019-03-21)
 
 ### Features:

@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-2019 Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -10,11 +7,11 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 from django.apps import AppConfig
 from django.apps import apps
@@ -39,11 +36,6 @@ def connect_userstories_signals():
     signals.pre_save.connect(handlers.cached_prev_us,
                              sender=apps.get_model("userstories", "UserStory"),
                              dispatch_uid="cached_prev_us")
-
-    # Role Points
-    signals.post_save.connect(handlers.update_role_points_when_create_or_edit_us,
-                              sender=apps.get_model("userstories", "UserStory"),
-                              dispatch_uid="update_role_points_when_create_or_edit_us")
 
     # Tasks
     signals.post_save.connect(handlers.update_milestone_of_tasks_when_edit_us,
@@ -108,6 +100,7 @@ def disconnect_all_userstories_signals():
 class UserStoriesAppConfig(AppConfig):
     name = "taiga.projects.userstories"
     verbose_name = "User Stories"
+    watched_types = ["userstories.userstory", ]
 
     def ready(self):
         connect_all_userstories_signals()
