@@ -34,7 +34,7 @@ class WikiLinkExtension(Extension):
         self.project = project
         return super().__init__(*args, **kwargs)
 
-    def extendMarkdown(self, md, md_globals):
+    def extendMarkdown(self, md):
         WIKILINK_RE = r"\[\[([\w0-9_ -]+)(\|[^\]]+)?\]\]"
         md.inlinePatterns.add("wikilinks",
                               WikiLinksPattern(md, WIKILINK_RE, self.project),
@@ -52,7 +52,16 @@ class WikiLinksPattern(Pattern):
 
     def handleMatch(self, m):
         label = m.group(2).strip()
-        url = resolve("wiki", self.project.slug, slugify(label))
+
+        # `project` could be other object (!)
+        slug = getattr(self.project, "slug", None)
+        if not slug:
+            project = getattr(self.project, "project", None)
+            slug = getattr(project, "slug", None)
+            if not slug:
+                return
+
+        url = resolve("wiki", slug, slugify(label))
 
         if m.group(3):
             title = m.group(3).strip()[1:]
@@ -76,13 +85,22 @@ class RelativeLinksTreeprocessor(Treeprocessor):
         super().__init__(md)
 
     def run(self, root):
-        links = root.getiterator("a")
+        links = root.iter("a")
         for a in links:
             href = a.get("href", "")
 
             if SLUG_RE.search(href):
                 # [wiki](wiki_page) -> <a href="FRONT_HOST/.../wiki/wiki_page" ...
-                url = resolve("wiki", self.project.slug, href)
+
+                # `project` could be other object (!)
+                slug = getattr(self.project, "slug", None)
+                if not slug:
+                    project = getattr(self.project, "project", None)
+                    slug = getattr(project, "slug", None)
+                    if not slug:
+                        continue
+
+                url = resolve("wiki", slug, href)
                 a.set("href", url)
                 a.set("class", "reference wiki")
 

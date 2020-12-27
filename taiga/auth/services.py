@@ -20,10 +20,11 @@
 This module contains a domain logic for authentication
 process. It called services because in DDD says it.
 
-NOTE: Python doesn't have java limitations for "everytghing
+NOTE: Python doesn't have java limitations for "everything
 should be contained in a class". Because of that, it
 not uses clasess and uses simple functions.
 """
+import uuid
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
@@ -92,7 +93,7 @@ def get_membership_by_token(token:str):
     membership_model = apps.get_model("projects", "Membership")
     qs = membership_model.objects.filter(token=token)
     if len(qs) == 0:
-        raise exc.NotFound(_("Token not matches any valid invitation."))
+        raise exc.NotFound(_("Token does not match any valid invitation."))
     return qs[0]
 
 
@@ -115,7 +116,11 @@ def public_register(username:str, password:str, email:str, full_name:str):
     user_model = get_user_model()
     user = user_model(username=username,
                       email=email,
-                      full_name=full_name)
+                      email_token=str(uuid.uuid4()),
+                      new_email=email,
+                      verified_email=False,
+                      full_name=full_name,
+                      read_new_terms=True)
     user.set_password(password)
     try:
         user.save()
@@ -155,13 +160,17 @@ def private_register_for_new_user(token:str, username:str, email:str,
     user_model = get_user_model()
     user = user_model(username=username,
                       email=email,
-                      full_name=full_name)
+                      full_name=full_name,
+                      email_token=str(uuid.uuid4()),
+                      new_email=email,
+                      verified_email=False,
+                      read_new_terms=True)
 
     user.set_password(password)
     try:
         user.save()
     except IntegrityError:
-        raise exc.WrongArguments(_("Error on creating new user."))
+        raise exc.WrongArguments(_("Error while creating new user."))
 
     membership = get_membership_by_token(token)
     membership.user = user
@@ -187,6 +196,9 @@ def make_auth_response_data(user) -> dict:
 def normal_login_func(request):
     username = request.DATA.get('username', None)
     password = request.DATA.get('password', None)
+
+    username = str(username) if username else None
+    password = str(password) if password else None
 
     user = get_and_validate_user(username=username, password=password)
     data = make_auth_response_data(user)

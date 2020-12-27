@@ -1,8 +1,12 @@
+# IMPORTANT NOTICE ABOUT UPCOMING TAIGA 6 RELEASE #
+
+Taiga6 is just around the corner. Please read [our pre-announcement](https://blog.taiga.io/taiga6-pre-announcement.html) so you know what's most important about our best release ever.
+
 # Taiga Backend #
 
-![Kaleidos Project](http://kaleidos.net/static/img/badge.svg "Kaleidos Project")
+[![Kaleidos Project](https://kaleidos.net/static/img/badge.png)](https://github.com/kaleidos "Kaleidos Project")
 [![Managed with Taiga.io](https://img.shields.io/badge/managed%20with-TAIGA.io-709f14.svg)](https://tree.taiga.io/project/taiga/ "Managed with Taiga.io")
-[![Build Status](https://img.shields.io/travis/taigaio/taiga-back.svg)](https://travis-ci.org/taigaio/taiga-back "Build Status")
+[![Tests Status](https://github.com/taigaio/taiga-back/workflows/Taiga%20Back%20-%20Test%20and%20Coverage/badge.svg?branch=master)](https://github.com/taigaio/taiga-back/actions?query=workflow%3A%22Taiga+Back+-+Test+and+Coverage%22 "Tests Status")
 [![Coverage Status](https://img.shields.io/coveralls/taigaio/taiga-back/master.svg)](https://coveralls.io/r/taigaio/taiga-back?branch=master "Coverage Status")
 
 
@@ -31,7 +35,7 @@ Help us keep the Taiga Community open and inclusive. Please read and follow our 
 
 Every code patch accepted in taiga codebase is licensed under [AGPL v3.0](http://www.gnu.org/licenses/agpl-3.0.html). You must be careful to not include any code that can not be licensed under this license.
 
-Please read carefully [our license](https://github.com/taigaio/taiga-back/blob/master/LICENSE) and ask us if you have any questions.
+Please read carefully [our license](https://github.com/taigaio/taiga-back/blob/master/LICENSE) and ask us if you have any questions as well as the [Contribution policy](https://github.com/taigaio/taiga-back/blob/master/CONTRIBUTING.md).
 
 
 #### Bug reports, enhancements and support ####
@@ -68,14 +72,14 @@ We are ready now to accept your help translating Taiga. It's easy (and fun!) jus
 
 #### Code patches ####
 
-Taiga will always be glad to receive code patches to update, fix or improve its code. 
+Taiga will always be glad to receive code patches to update, fix or improve its code.
 
 If you know how to improve our code base or you found a bug, a security vulnerability or a performance issue and you think you can solve it, we will be very happy to accept your pull-request. If your code requires considerable changes, we recommend you first  talk to us directly. We will find the best way to help.
 
 
 #### UI enhancements ####
 
-Taiga is made for developers and designers. We care enormously about UI because usability and design are both critical aspects of the Taiga experience. 
+Taiga is made for developers and designers. We care enormously about UI because usability and design are both critical aspects of the Taiga experience.
 
 There are two possible ways to contribute to our UI:
 - **Bugs**: If you find a bug regarding front-end, please report it as previously indicated in the Bug reports section or send a pull-request as indicated in the Code Patches section.
@@ -93,13 +97,12 @@ pip install -r requirements.txt
 python manage.py migrate --noinput
 python manage.py loaddata initial_user
 python manage.py loaddata initial_project_templates
-python manage.py loaddata initial_role
 python manage.py sample_data
 ```
 
-**IMPORTANT: Taiga only runs with python 3.4+**
+**IMPORTANT: Taiga only runs with python 3.5+**
 
 Initial auth data: admin/123123
 
 If you want a complete environment for production usage, you can try the taiga bootstrapping
-scripts https://github.com/taigaio/taiga-scripts (warning: alpha state). All the information about the different installation methods (production, development, vagrant, docker...) can be found here http://taigaio.github.io/taiga-doc/dist/#_installation_guide. 
+scripts https://github.com/taigaio/taiga-scripts (warning: alpha state). All the information about the different installation methods (production, development, vagrant, docker...) can be found here http://taigaio.github.io/taiga-doc/dist/#_installation_guide.

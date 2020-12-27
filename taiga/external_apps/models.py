@@ -17,15 +17,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from django.conf import settings
+from django.core import signing
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 
-from . import services
-
 import uuid
 
+
 def _generate_uuid():
-    return str(uuid.uuid1())
+    return str(uuid.uuid4())
 
 
 class Application(models.Model):
@@ -50,13 +50,23 @@ class Application(models.Model):
 
 
 class ApplicationToken(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, blank=False, null=False,
-                                    related_name="application_tokens",
-                                    verbose_name=_("user"))
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        blank=False,
+        null=False,
+        related_name="application_tokens",
+        verbose_name=_("user"),
+        on_delete=models.CASCADE,
+    )
 
-    application = models.ForeignKey("Application", blank=False, null=False,
-                                    related_name="application_tokens",
-                                    verbose_name=_("application"))
+    application = models.ForeignKey(
+        "Application",
+        blank=False,
+        null=False,
+        related_name="application_tokens",
+        verbose_name=_("application"),
+        on_delete=models.CASCADE,
+    )
 
     auth_code = models.CharField(max_length=255, null=True, blank=True, default=None)
     token = models.CharField(max_length=255, null=True, blank=True, default=None)
@@ -65,7 +75,7 @@ class ApplicationToken(models.Model):
 
     class Meta:
         verbose_name = "application token"
-        verbose_name_plural = "application tolens"
+        verbose_name_plural = "application tokens"
         ordering = ["application", "user",]
         unique_together = ("application", "user",)
 
@@ -82,4 +92,5 @@ class ApplicationToken(models.Model):
     def generate_token(self):
         self.auth_code = None
         if not self.token:
-            self.token = _generate_uuid()
+            data = {"app_token_id": self.pk}
+            self.token = signing.dumps(data)

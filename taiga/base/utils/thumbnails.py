@@ -58,30 +58,42 @@ except Exception:
     pass
 
 Image.init()
+
+
 # PSD thumbnail generator
 def psd_image_factory(data, *args):
     try:
-        return PSDImage.from_stream(data).as_PIL()
+        return PSDImage.open(data).compose()
     except Exception:
         raise TypeError
+
 
 Image.register_open("PSD", psd_image_factory)
 
 
-def get_thumbnail_url(file_obj, thumbnailer_size):
+def get_thumbnail(file_obj, thumbnailer_size):
     # Ugly hack to temporary ignore tiff files
     relative_name = file_obj
     if isinstance(file_obj, FieldFile):
         relative_name = file_obj.name
 
     source_extension = os.path.splitext(relative_name)[1][1:]
-    if source_extension == "tiff":
+    if source_extension not in ('png', 'svg', 'gif', 'bmp', 'jpeg', 'jpg'):
         return None
 
     try:
-        path_url = get_thumbnailer(file_obj)[thumbnailer_size].url
-        thumb_url = get_absolute_url(path_url)
+        thumbnailer = get_thumbnailer(file_obj)
+        return thumbnailer[thumbnailer_size]
     except InvalidImageFormatError:
-        thumb_url = None
+        return None
 
+
+def get_thumbnail_url(file_obj, thumbnailer_size):
+    thumbnail = get_thumbnail(file_obj, thumbnailer_size)
+
+    if not thumbnail:
+        return None
+
+    path_url = thumbnail.url
+    thumb_url = get_absolute_url(path_url)
     return thumb_url

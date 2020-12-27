@@ -39,7 +39,7 @@ class Application(ModelRetrieveViewSet):
 
     @detail_route(methods=["GET"])
     def token(self, request, *args, **kwargs):
-        if self.request.user.is_anonymous():
+        if self.request.user.is_anonymous:
             raise exc.NotAuthenticated(_("Authentication required"))
 
         application = get_object_or_404(models.Application, **kwargs)
@@ -66,14 +66,19 @@ class ApplicationToken(ModelCrudViewSet):
     permission_classes = (permissions.ApplicationTokenPermission,)
 
     def get_queryset(self):
-        if self.request.user.is_anonymous():
+        if self.request.user.is_anonymous:
             raise exc.NotAuthenticated(_("Authentication required"))
 
-        return models.ApplicationToken.objects.filter(user=self.request.user)
+        queryset = models.ApplicationToken.objects.filter(user=self.request.user)
+
+        application_id = self.request.QUERY_PARAMS.get("application", None)
+        if application_id:
+            queryset = queryset.filter(application_id=application_id)
+        return queryset
 
     @list_route(methods=["POST"])
     def authorize(self, request, pk=None):
-        if self.request.user.is_anonymous():
+        if self.request.user.is_anonymous:
             raise exc.NotAuthenticated(_("Authentication required"))
 
         application_id = request.DATA.get("application", None)

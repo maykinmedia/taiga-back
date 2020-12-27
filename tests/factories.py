@@ -31,7 +31,7 @@ from taiga.permissions.choices import MEMBERS_PERMISSIONS
 
 
 
-class Factory(factory.DjangoModelFactory):
+class Factory(factory.django.DjangoModelFactory):
     class Meta:
         strategy = factory.CREATE_STRATEGY
         model = None
@@ -59,10 +59,13 @@ class ProjectTemplateFactory(Factory):
 
     epic_statuses = []
     us_statuses = []
+    us_duedates = []
     points = []
     task_statuses = []
+    task_duedates = []
     issue_statuses = []
     issue_types = []
+    issue_duedates = []
     priorities = []
     severities = []
     roles = []
@@ -172,7 +175,7 @@ class IssueAttachmentFactory(Factory):
 class WikiAttachmentFactory(Factory):
     project = factory.SubFactory("tests.factories.ProjectFactory")
     owner = factory.SubFactory("tests.factories.UserFactory")
-    content_object = factory.SubFactory("tests.factories.WikiFactory")
+    content_object = factory.SubFactory("tests.factories.WikiPageFactory")
     attached_file = factory.django.FileField(data=b"File contents")
 
     class Meta:
@@ -188,6 +191,8 @@ class UserFactory(Factory):
     username = factory.Sequence(lambda n: "user{}".format(n))
     email = factory.LazyAttribute(lambda obj: '%s@email.com' % obj.username)
     password = factory.PostGeneration(lambda obj, *args, **kwargs: obj.set_password(obj.username))
+    accepted_terms = True
+    read_new_terms = True
 
 
 class MembershipFactory(Factory):
@@ -292,6 +297,17 @@ class UserStoryFactory(Factory):
     status = factory.SubFactory("tests.factories.UserStoryStatusFactory")
     milestone = factory.SubFactory("tests.factories.MilestoneFactory")
     tags = factory.Faker("words")
+    due_date = factory.LazyAttribute(lambda o: date.today() + timedelta(days=7))
+    due_date_reason = factory.Faker("words")
+
+    @factory.post_generation
+    def assigned_users(self, create, users_list, **kwargs):
+        if not create:
+            return
+
+        if users_list:
+            for user in users_list:
+                self.assigned_users.add(user)
 
 
 class TaskFactory(Factory):
@@ -308,6 +324,8 @@ class TaskFactory(Factory):
     milestone = factory.SubFactory("tests.factories.MilestoneFactory")
     user_story = factory.SubFactory("tests.factories.UserStoryFactory")
     tags = factory.Faker("words")
+    due_date = factory.LazyAttribute(lambda o: date.today() + timedelta(days=7))
+    due_date_reason = factory.Faker("words")
 
 
 class IssueFactory(Factory):
@@ -326,6 +344,8 @@ class IssueFactory(Factory):
     type = factory.SubFactory("tests.factories.IssueTypeFactory")
     milestone = factory.SubFactory("tests.factories.MilestoneFactory")
     tags = factory.Faker("words")
+    due_date = factory.LazyAttribute(lambda o: date.today() + timedelta(days=7))
+    due_date_reason = factory.Faker("words")
 
 
 class WikiPageFactory(Factory):
@@ -365,6 +385,15 @@ class UserStoryStatusFactory(Factory):
         strategy = factory.CREATE_STRATEGY
 
     name = factory.Sequence(lambda n: "User Story status {}".format(n))
+    project = factory.SubFactory("tests.factories.ProjectFactory")
+
+
+class UserStoryDueDateFactory(Factory):
+    class Meta:
+        model = "projects.UserStoryDueDate"
+        strategy = factory.CREATE_STRATEGY
+
+    name = factory.Sequence(lambda n: "User Story due date {}".format(n))
     project = factory.SubFactory("tests.factories.ProjectFactory")
 
 
@@ -597,6 +626,10 @@ def create_issue(**kwargs):
     return IssueFactory.create(**defaults)
 
 
+class Missing:
+    pass
+
+
 def create_task(**kwargs):
     "Create a task and along with its dependencies."
     owner = kwargs.pop("owner", None)
@@ -607,13 +640,23 @@ def create_task(**kwargs):
     if project is None:
         project = ProjectFactory.create(owner=owner)
 
+    status = kwargs.pop("status", None)
+    milestone = kwargs.pop("milestone", None)
+
     defaults = {
         "project": project,
         "owner": owner,
-        "status": TaskStatusFactory.create(project=project),
-        "milestone": MilestoneFactory.create(project=project),
-        "user_story": UserStoryFactory.create(project=project, owner=owner),
+        "status": status or TaskStatusFactory.create(project=project),
+        "milestone": milestone or MilestoneFactory.create(project=project),
     }
+
+    user_story = kwargs.pop("user_story", Missing)
+
+    defaults["user_story"] = (
+        UserStoryFactory.create(project=project, owner=owner, milestone=defaults["milestone"])
+        if user_story is Missing
+        else user_story
+    )
     defaults.update(kwargs)
 
     return TaskFactory.create(**defaults)
@@ -653,8 +696,7 @@ def create_invitation(**kwargs):
 
 
 def create_userstory(**kwargs):
-    "Create an user story along with its dependencies"
-
+    """Create an user story along with its dependencies"""
     owner = kwargs.pop("owner", None)
     if not owner:
         owner = UserFactory.create()
@@ -662,6 +704,7 @@ def create_userstory(**kwargs):
     project = kwargs.pop("project", None)
     if project is None:
         project = ProjectFactory.create(owner=owner)
+    project.default_points = PointsFactory.create(project=project)
 
     defaults = {
         "project": project,
@@ -708,6 +751,7 @@ def create_project(**kwargs):
     project.default_us_status = UserStoryStatusFactory.create(project=project)
     project.default_task_status = TaskStatusFactory.create(project=project)
     project.default_epic_status = EpicStatusFactory.create(project=project)
+    project.default_points = PointsFactory.create(project=project)
 
     project.save()
 

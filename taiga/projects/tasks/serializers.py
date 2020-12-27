@@ -22,6 +22,7 @@ from taiga.base.neighbors import NeighborsSerializerMixin
 
 from taiga.mdrender.service import render as mdrender
 from taiga.projects.attachments.serializers import BasicAttachmentsInfoSerializerMixin
+from taiga.projects.due_dates.serializers import DueDateSerializerMixin
 from taiga.projects.mixins.serializers import OwnerExtraInfoSerializerMixin
 from taiga.projects.mixins.serializers import ProjectExtraInfoSerializerMixin
 from taiga.projects.mixins.serializers import AssignedToExtraInfoSerializerMixin
@@ -36,7 +37,8 @@ class TaskListSerializer(VoteResourceSerializerMixin, WatchedResourceSerializer,
                          OwnerExtraInfoSerializerMixin, AssignedToExtraInfoSerializerMixin,
                          StatusExtraInfoSerializerMixin, ProjectExtraInfoSerializerMixin,
                          BasicAttachmentsInfoSerializerMixin, TaggedInProjectResourceSerializer,
-                         TotalCommentsSerializerMixin, serializers.LightSerializer):
+                         TotalCommentsSerializerMixin, DueDateSerializerMixin,
+                         serializers.LightSerializer):
 
     id = Field()
     user_story = Field(attr="user_story_id")
@@ -59,6 +61,11 @@ class TaskListSerializer(VoteResourceSerializerMixin, WatchedResourceSerializer,
     is_closed = MethodField()
     user_story_extra_info = Field()
 
+    def get_generated_user_stories(self, obj):
+        assert hasattr(obj, "generated_user_stories_attr"),\
+            "instance must have a generated_user_stories_attr attribute"
+        return obj.generated_user_stories_attr
+
     def get_milestone_slug(self, obj):
         return obj.milestone.slug if obj.milestone else None
 
@@ -68,6 +75,7 @@ class TaskListSerializer(VoteResourceSerializerMixin, WatchedResourceSerializer,
 
 class TaskSerializer(TaskListSerializer):
     comment = MethodField()
+    generated_user_stories = MethodField()
     blocked_note_html = MethodField()
     description = Field()
     description_html = MethodField()

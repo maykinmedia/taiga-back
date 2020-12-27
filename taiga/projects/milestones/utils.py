@@ -20,12 +20,7 @@
 from django.apps import apps
 from django.db.models import Prefetch
 
-from taiga.projects.notifications.utils import attach_watchers_to_queryset
-from taiga.projects.notifications.utils import attach_total_watchers_to_queryset
-from taiga.projects.notifications.utils import attach_is_watcher_to_queryset
 from taiga.projects.userstories import utils as userstories_utils
-from taiga.projects.votes.utils import attach_total_voters_to_queryset
-from taiga.projects.votes.utils import attach_is_voter_to_queryset
 
 
 def attach_total_points(queryset, as_field="total_points_attr"):
@@ -74,29 +69,15 @@ def attach_extra_info(queryset, user=None):
     us_queryset = UserStory.objects.select_related("milestone",
                                                    "project",
                                                    "status",
-                                                   "owner",
-                                                   "assigned_to",
-                                                   "generated_from_issue")
+                                                   "owner")
 
     us_queryset = userstories_utils.attach_total_points(us_queryset)
     us_queryset = userstories_utils.attach_role_points(us_queryset)
     us_queryset = userstories_utils.attach_epics(us_queryset)
 
-    us_queryset = attach_total_voters_to_queryset(us_queryset)
-    us_queryset = attach_watchers_to_queryset(us_queryset)
-    us_queryset = attach_total_watchers_to_queryset(us_queryset)
-    us_queryset = attach_is_voter_to_queryset(us_queryset, user)
-    us_queryset = attach_is_watcher_to_queryset(us_queryset, user)
-
     queryset = queryset.prefetch_related(Prefetch("user_stories", queryset=us_queryset))
 
     queryset = attach_total_points(queryset)
     queryset = attach_closed_points(queryset)
-
-    queryset = attach_total_voters_to_queryset(queryset)
-    queryset = attach_watchers_to_queryset(queryset)
-    queryset = attach_total_watchers_to_queryset(queryset)
-    queryset = attach_is_voter_to_queryset(queryset, user)
-    queryset = attach_is_watcher_to_queryset(queryset, user)
 
     return queryset

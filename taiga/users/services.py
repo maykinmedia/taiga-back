@@ -19,10 +19,17 @@
 """
 This model contains a domain logic for users application.
 """
+from io import StringIO
+import csv
+import os
+import uuid
+import zipfile
+
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.core.files.storage import default_storage
+from django.db.models import OuterRef, Q, Subquery
 from django.db import connection
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
@@ -114,7 +121,7 @@ def get_visible_project_ids(from_user, by_user):
     member_perm_conditions = Q(project__anon_permissions__contains=required_permissions)
 
     # Authenticated
-    if by_user.is_authenticated():
+    if by_user.is_authenticated:
         # Calculating the projects wich from_user user is member
         by_user_project_ids = by_user.memberships.values_list("project__id", flat=True)
         # Adding to the condition two OR situations:
@@ -148,10 +155,14 @@ def get_stats_for_user(from_user, by_user):
         .count()
 
     UserStory = apps.get_model('userstories', 'UserStory')
+
+    assigned_users_ids = UserStory.objects.order_by().filter(
+        assigned_users__in=[from_user], id=OuterRef('pk')).values('pk')
+
     total_num_closed_userstories = UserStory.objects.filter(
         is_closed=True,
-        project__id__in=project_ids,
-        assigned_to=from_user).count()
+        project__id__in=project_ids).filter(
+        Q(assigned_to=from_user) | Q(pk__in=Subquery(assigned_users_ids))).count()
 
     project_stats = {
         'total_num_projects': total_num_projects,
@@ -167,7 +178,7 @@ def get_liked_content_for_user(user):
         - The key is the content_type model
         - The values are list of id's of the different objects liked by the user
     """
-    if user.is_anonymous():
+    if user.is_anonymous:
         return {}
 
     user_likes = {}
@@ -184,7 +195,7 @@ def get_voted_content_for_user(user):
         - The key is the content_type model
         - The values are list of id's of the different objects voted by the user
     """
-    if user.is_anonymous():
+    if user.is_anonymous:
         return {}
 
     user_votes = {}
@@ -201,7 +212,7 @@ def get_watched_content_for_user(user):
         - The key is the content_type model
         - The values are list of id's of the different objects watched by the user
     """
-    if user.is_anonymous():
+    if user.is_anonymous:
         return {}
 
     user_watches = {}
@@ -377,7 +388,7 @@ def get_watched_list(for_user, from_user, type=None, q=None):
     """
 
     from_user_id = -1
-    if not from_user.is_anonymous():
+    if not from_user.is_anonymous:
         from_user_id = from_user.id
 
     sql = sql.format(
@@ -464,7 +475,7 @@ def get_liked_list(for_user, from_user, type=None, q=None):
     """
 
     from_user_id = -1
-    if not from_user.is_anonymous():
+    if not from_user.is_anonymous:
         from_user_id = from_user.id
 
     sql = sql.format(
@@ -556,7 +567,7 @@ def get_voted_list(for_user, from_user, type=None, q=None):
     """
 
     from_user_id = -1
-    if not from_user.is_anonymous():
+    if not from_user.is_anonymous:
         from_user_id = from_user.id
 
     sql = sql.format(
@@ -605,3 +616,42 @@ def has_available_slot_for_new_project(owner, is_private, total_memberships):
         return (False, error_memberships_exceeded)
 
     return (True, None)
+
+
+def render_profile(user, outfile):
+    csv_data = StringIO()
+    fieldnames = ["username", "email", "full_name", "bio"]
+
+    writer = csv.DictWriter(csv_data, fieldnames=fieldnames)
+    writer.writeheader()
+
+    user_data = {}
+    for fieldname in fieldnames:
+        user_data[fieldname] = getattr(user, fieldname, '')
+
+    writer.writerow(user_data)
+
+    outfile.write(csv_data.getvalue().encode())
+
+
+def export_profile(user):
+    filename = "{}-{}".format(user.username, uuid.uuid4().hex)
+
+    csv_path = "exports/{}/{}.csv".format(user.pk, filename)
+    zip_path = "exports/{}/{}.zip".format(user.pk, filename)
+
+    with default_storage.open(csv_path, mode="wb") as output:
+        render_profile(user, output)
+        output.close()
+
+    zf = zipfile.ZipFile(default_storage.path(zip_path), "w", zipfile.ZIP_DEFLATED)
+
+    zf.write(default_storage.path(csv_path), "{}-profile.csv".format(filename))
+    os.remove(default_storage.path(csv_path))
+
+    if user.photo:
+        _, file_extension = os.path.splitext(default_storage.path(user.photo.name))
+        zf.write(default_storage.path(user.photo.name),
+                 "{}-photo{}".format(filename, file_extension))
+
+    return default_storage.url(zip_path)

@@ -22,7 +22,7 @@ import csv
 
 from unittest import mock
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 
 from taiga.base.utils import json
 from taiga.permissions.choices import MEMBERS_PERMISSIONS, ANON_PERMISSIONS
@@ -59,16 +59,17 @@ def test_custom_fields_csv_generation():
     attr = f.EpicCustomAttributeFactory.create(project=project, name="attr1", description="desc")
     epic = f.EpicFactory.create(project=project)
     attr_values = epic.custom_attributes_values
-    attr_values.attributes_values = {str(attr.id):"val1"}
+    attr_values.attributes_values = {str(attr.id): "val1"}
     attr_values.save()
     queryset = project.epics.all()
     data = services.epics_to_csv(project, queryset)
     data.seek(0)
     reader = csv.reader(data)
     row = next(reader)
-    assert row[18] == attr.name
+
+    assert row[19] == attr.name
     row = next(reader)
-    assert row[18] == "val1"
+    assert row[19] == "val1"
 
 
 def test_update_epic_order(client):

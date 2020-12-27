@@ -96,7 +96,7 @@ def is_simple_callable(obj):
     if not (function or method):
         return False
 
-    args, _, _, defaults = inspect.getargspec(obj)
+    args, _, _, defaults, _, _, _ = inspect.getfullargspec(obj)
     len_args = len(args) if function else len(args) - 1
     len_defaults = len(defaults) if defaults else 0
     return len_args <= len_defaults
@@ -450,14 +450,14 @@ class ModelField(WritableField):
             self.validators.append(validators.MaxValueValidator(self.max_value))
 
     def from_native(self, value):
-        rel = getattr(self.model_field, "rel", None)
+        rel = getattr(self.model_field, "remote_field", None)
         if rel is not None:
             return rel.to._meta.get_field(rel.field_name).to_python(value)
         else:
             return self.model_field.to_python(value)
 
     def field_to_native(self, obj, field_name):
-        value = self.model_field._get_val_from_obj(obj)
+        value = self.model_field.value_from_object(obj)
         if is_protected_type(value):
             return value
         return self.model_field.value_to_string(obj)
@@ -519,7 +519,7 @@ class CharField(WritableField):
     def from_native(self, value):
         if value in validators.EMPTY_VALUES:
             return ""
-            
+
         return smart_text(value)
 
     def to_native(self, value):

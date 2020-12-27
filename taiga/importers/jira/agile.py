@@ -17,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import datetime
+from collections import OrderedDict
 
 from django.template.defaultfilters import slugify
 from taiga.projects.references.models import recalc_reference_counter
@@ -67,51 +68,56 @@ class JiraAgileImporter(JiraImporterCommon):
             options['type'] = "kanban"
 
         project_template.is_epics_activated = True
-        project_template.epic_statuses = []
-        project_template.us_statuses = []
-        project_template.task_statuses = []
-        project_template.issue_statuses = []
+        project_template.epic_statuses = OrderedDict()
+        project_template.us_statuses = OrderedDict()
+        project_template.task_statuses = OrderedDict()
+        project_template.issue_statuses = OrderedDict()
 
         counter = 0
         for column in project_config['columnConfig']['columns']:
-            project_template.epic_statuses.append({
+            column_slug = slugify(column['name'])
+            project_template.epic_statuses[column_slug] = {
                 "name": column['name'],
-                "slug": slugify(column['name']),
+                "slug": column_slug,
                 "is_closed": False,
                 "is_archived": False,
                 "color": "#999999",
                 "wip_limit": None,
                 "order": counter,
-            })
-            project_template.us_statuses.append({
+            }
+            project_template.us_statuses[column_slug] = {
                 "name": column['name'],
-                "slug": slugify(column['name']),
+                "slug": column_slug,
                 "is_closed": False,
                 "is_archived": False,
                 "color": "#999999",
                 "wip_limit": None,
                 "order": counter,
-            })
-            project_template.task_statuses.append({
+            }
+            project_template.task_statuses[column_slug] = {
                 "name": column['name'],
-                "slug": slugify(column['name']),
+                "slug": column_slug,
                 "is_closed": False,
                 "is_archived": False,
                 "color": "#999999",
                 "wip_limit": None,
                 "order": counter,
-            })
-            project_template.issue_statuses.append({
+            }
+            project_template.issue_statuses[column_slug] = {
                 "name": column['name'],
-                "slug": slugify(column['name']),
+                "slug": column_slug,
                 "is_closed": False,
                 "is_archived": False,
                 "color": "#999999",
                 "wip_limit": None,
                 "order": counter,
-            })
+            }
             counter += 1
 
+        project_template.epic_statuses = list(project_template.epic_statuses.values())
+        project_template.us_statuses = list(project_template.us_statuses.values())
+        project_template.task_statuses = list(project_template.task_statuses.values())
+        project_template.issue_statuses = list(project_template.issue_statuses.values())
         project_template.default_options["epic_status"] = project_template.epic_statuses[0]['name']
         project_template.default_options["us_status"] = project_template.us_statuses[0]['name']
         project_template.default_options["task_status"] = project_template.task_statuses[0]['name']
@@ -193,7 +199,7 @@ class JiraAgileImporter(JiraImporterCommon):
                     external_reference = ["jira", self._client.get_issue_url(issue['key'])]
 
                 try:
-                    milestone = project.milestones.get(name=issue['fields'].get('sprint', {}).get('name', ''))
+                    milestone = project.milestones.get(name=(issue['fields'].get('sprint', {}) or {}).get('name', ''))
                 except Milestone.DoesNotExist:
                     milestone = None
 
@@ -201,7 +207,7 @@ class JiraAgileImporter(JiraImporterCommon):
                     project=project,
                     owner=owner,
                     assigned_to=assigned_to,
-                    status=project.us_statuses.get(name=issue['fields']['status']['name']),
+                    status=project.us_statuses.get(slug=slugify(issue['fields']['status']['name'])),
                     kanban_order=counter,
                     sprint_order=counter,
                     backlog_order=counter,
@@ -285,7 +291,7 @@ class JiraAgileImporter(JiraImporterCommon):
                     project=project,
                     owner=owner,
                     assigned_to=assigned_to,
-                    status=project.task_statuses.get(name=issue['fields']['status']['name']),
+                    status=project.task_statuses.get(slug=slugify(issue['fields']['status']['name'])),
                     subject=issue['fields']['summary'],
                     description=issue['fields']['description'] or '',
                     tags=issue['fields']['labels'],
@@ -336,7 +342,7 @@ class JiraAgileImporter(JiraImporterCommon):
                     project=project,
                     owner=owner,
                     assigned_to=assigned_to,
-                    status=project.epic_statuses.get(name=issue['fields']['status']['name']),
+                    status=project.epic_statuses.get(slug=slugify(issue['fields']['status']['name'])),
                     subject=issue['fields']['summary'],
                     description=issue['fields']['description'] or '',
                     epics_order=counter,

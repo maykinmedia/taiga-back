@@ -66,12 +66,30 @@ class Membership(models.Model):
     # stores invitations to memberships that does not have
     # assigned user.
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, default=None,
-                             related_name="memberships")
-    project = models.ForeignKey("Project", null=False, blank=False,
-                                related_name="memberships")
-    role = models.ForeignKey("users.Role", null=False, blank=False,
-                             related_name="memberships")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="memberships",
+        on_delete=models.CASCADE,
+    )
+
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="memberships",
+        on_delete=models.CASCADE,
+    )
+    role = models.ForeignKey(
+        "users.Role",
+        null=False,
+        blank=False,
+        related_name="memberships",
+        on_delete=models.CASCADE,
+    )
+
     is_admin = models.BooleanField(default=False, null=False, blank=False)
 
     # Invitation metadata
@@ -82,8 +100,13 @@ class Membership(models.Model):
     token = models.CharField(max_length=60, blank=True, null=True, default=None,
                              verbose_name=_("token"))
 
-    invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="ihaveinvited+",
-                                   null=True, blank=True)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="ihaveinvited+",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
 
     invitation_extra_text = models.TextField(null=True, blank=True,
                                              verbose_name=_("invitation extra text"))
@@ -160,8 +183,15 @@ class Project(ProjectDefaults, TaggedMixin, TagsColorsMixin, models.Model):
                                         default=timezone.now)
     modified_date = models.DateTimeField(null=False, blank=False,
                                          verbose_name=_("modified date"))
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
-                              related_name="owned_projects", verbose_name=_("owner"))
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        related_name="owned_projects",
+        verbose_name=_("owner"),
+        on_delete=models.SET_NULL,
+    )
+
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="projects",
                                      through="Membership", verbose_name=_("members"),
                                      through_fields=("project", "user"))
@@ -186,18 +216,21 @@ class Project(ProjectDefaults, TaggedMixin, TagsColorsMixin, models.Model):
     videoconferences_extra_data = models.CharField(max_length=250, null=True, blank=True,
                                                    verbose_name=_("videoconference extra data"))
 
-    creation_template = models.ForeignKey("projects.ProjectTemplate",
-                                          related_name="projects", null=True,
-                                          on_delete=models.SET_NULL,
-                                          blank=True, default=None,
-                                          verbose_name=_("creation template"))
+    creation_template = models.ForeignKey(
+        "projects.ProjectTemplate",
+        related_name="projects",
+        null=True,
+        on_delete=models.SET_NULL,
+        blank=True,
+        default=None,
+        verbose_name=_("creation template"))
 
     is_private = models.BooleanField(default=True, null=False, blank=True,
                                      verbose_name=_("is private"))
     anon_permissions = ArrayField(models.TextField(null=False, blank=False, choices=ANON_PERMISSIONS),
-                                  null=True, blank=True, default=[], verbose_name=_("anonymous permissions"))
+                                  null=True, blank=True, default=list, verbose_name=_("anonymous permissions"))
     public_permissions = ArrayField(models.TextField(null=False, blank=False, choices=MEMBERS_PERMISSIONS),
-                                    null=True, blank=True, default=[], verbose_name=_("user permissions"))
+                                    null=True, blank=True, default=list, verbose_name=_("user permissions"))
 
     is_featured = models.BooleanField(default=False, null=False, blank=True,
                                       verbose_name=_("is featured"))
@@ -294,7 +327,9 @@ class Project(ProjectDefaults, TaggedMixin, TagsColorsMixin, models.Model):
 
         if not self.slug:
             with advisory_lock("project-creation"):
-                base_slug = "{}-{}".format(self.owner.username, self.name)
+                base_slug = self.name
+                if settings.DEFAULT_PROJECT_SLUG_PREFIX:
+                    base_slug = "{}-{}".format(self.owner.username, self.name)
                 self.slug = slugify_uniquely(base_slug, self.__class__)
                 super().save(*args, **kwargs)
         else:
@@ -467,7 +502,7 @@ class Project(ProjectDefaults, TaggedMixin, TagsColorsMixin, models.Model):
         set_notify_policy_level_to_ignore(notify_policy)
 
     def delete_related_content(self):
-        # NOTE: Remember to update code in taiga.projects.admin.ProjectAdmin.delete_selected
+        # NOTE: Remember to update code in taiga.projects.admin.ProjectAdmin.delete_queryset
         from taiga.events.apps import (connect_events_signals,
                                        disconnect_events_signals)
         from taiga.projects.epics.apps import (connect_all_epics_signals,
@@ -505,8 +540,14 @@ class Project(ProjectDefaults, TaggedMixin, TagsColorsMixin, models.Model):
 
 
 class ProjectModulesConfig(models.Model):
-    project = models.OneToOneField("Project", null=False, blank=False,
-                                   related_name="modules_config", verbose_name=_("project"))
+    project = models.OneToOneField(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="modules_config",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
     config = JSONField(null=True, blank=True, verbose_name=_("modules config"))
 
     class Meta:
@@ -527,8 +568,14 @@ class EpicStatus(models.Model):
                                     verbose_name=_("is closed"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
-    project = models.ForeignKey("Project", null=False, blank=False,
-                                related_name="epic_statuses", verbose_name=_("project"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="epic_statuses",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
 
     class Meta:
         verbose_name = "epic status"
@@ -564,8 +611,14 @@ class UserStoryStatus(models.Model):
                              verbose_name=_("color"))
     wip_limit = models.IntegerField(null=True, blank=True, default=None,
                                     verbose_name=_("work in progress limit"))
-    project = models.ForeignKey("Project", null=False, blank=False,
-                                related_name="us_statuses", verbose_name=_("project"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="us_statuses",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
 
     class Meta:
         verbose_name = "user story status"
@@ -592,8 +645,14 @@ class Points(models.Model):
                                 verbose_name=_("order"))
     value = models.FloatField(default=None, null=True, blank=True,
                               verbose_name=_("value"))
-    project = models.ForeignKey("Project", null=False, blank=False,
-                                related_name="points", verbose_name=_("project"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="points",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
 
     class Meta:
         verbose_name = "points"
@@ -605,8 +664,37 @@ class Points(models.Model):
         return self.name
 
 
-# Tasks common models
+class UserStoryDueDate(models.Model):
+    name = models.CharField(max_length=255, null=False, blank=False,
+                            verbose_name=_("name"))
+    order = models.IntegerField(default=10, null=False, blank=False,
+                                verbose_name=_("order"))
+    by_default = models.BooleanField(default=False, null=False, blank=True,
+                                    verbose_name=_("by default"))
+    color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
+                             verbose_name=_("color"))
+    days_to_due = models.IntegerField(null=True, blank=True, default=None,
+                                    verbose_name=_("days to due"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="us_duedates",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
 
+    class Meta:
+        verbose_name = "user story due date"
+        verbose_name_plural = "user story due dates"
+        ordering = ["project", "order", "name"]
+        unique_together = ("project", "name")
+
+    def __str__(self):
+        return self.name
+
+
+# Tasks common models
 class TaskStatus(models.Model):
     name = models.CharField(max_length=255, null=False, blank=False,
                             verbose_name=_("name"))
@@ -618,8 +706,14 @@ class TaskStatus(models.Model):
                                     verbose_name=_("is closed"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
-    project = models.ForeignKey("Project", null=False, blank=False,
-                                related_name="task_statuses", verbose_name=_("project"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="task_statuses",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
 
     class Meta:
         verbose_name = "task status"
@@ -639,6 +733,36 @@ class TaskStatus(models.Model):
         return super().save(*args, **kwargs)
 
 
+class TaskDueDate(models.Model):
+    name = models.CharField(max_length=255, null=False, blank=False,
+                            verbose_name=_("name"))
+    order = models.IntegerField(default=10, null=False, blank=False,
+                                verbose_name=_("order"))
+    by_default = models.BooleanField(default=False, null=False, blank=True,
+                                    verbose_name=_("by default"))
+    color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
+                             verbose_name=_("color"))
+    days_to_due = models.IntegerField(null=True, blank=True, default=None,
+                                    verbose_name=_("days to due"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="task_duedates",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
+
+    class Meta:
+        verbose_name = "task due date"
+        verbose_name_plural = "task due dates"
+        ordering = ["project", "order", "name"]
+        unique_together = (("project", "name"))
+
+    def __str__(self):
+        return self.name
+
+
 # Issue common Models
 
 class Priority(models.Model):
@@ -648,8 +772,14 @@ class Priority(models.Model):
                                 verbose_name=_("order"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
-    project = models.ForeignKey("Project", null=False, blank=False,
-                                related_name="priorities", verbose_name=_("project"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="priorities",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
 
     class Meta:
         verbose_name = "priority"
@@ -668,8 +798,14 @@ class Severity(models.Model):
                                 verbose_name=_("order"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
-    project = models.ForeignKey("Project", null=False, blank=False,
-                                related_name="severities", verbose_name=_("project"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="severities",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
 
     class Meta:
         verbose_name = "severity"
@@ -692,8 +828,14 @@ class IssueStatus(models.Model):
                                     verbose_name=_("is closed"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
-    project = models.ForeignKey("Project", null=False, blank=False,
-                                related_name="issue_statuses", verbose_name=_("project"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="issue_statuses",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
 
     class Meta:
         verbose_name = "issue status"
@@ -720,12 +862,48 @@ class IssueType(models.Model):
                                 verbose_name=_("order"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
-    project = models.ForeignKey("Project", null=False, blank=False,
-                                related_name="issue_types", verbose_name=_("project"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="issue_types",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
 
     class Meta:
         verbose_name = "issue type"
         verbose_name_plural = "issue types"
+        ordering = ["project", "order", "name"]
+        unique_together = ("project", "name")
+
+    def __str__(self):
+        return self.name
+
+
+class IssueDueDate(models.Model):
+    name = models.CharField(max_length=255, null=False, blank=False,
+                            verbose_name=_("name"))
+    order = models.IntegerField(default=10, null=False, blank=False,
+                                verbose_name=_("order"))
+    by_default = models.BooleanField(default=False, null=False, blank=True,
+                                    verbose_name=_("by default"))
+    color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
+                             verbose_name=_("color"))
+    days_to_due = models.IntegerField(null=True, blank=True, default=None,
+                                    verbose_name=_("days to due"))
+    project = models.ForeignKey(
+        "Project",
+        null=False,
+        blank=False,
+        related_name="issue_duedates",
+        verbose_name=_("project"),
+         on_delete=models.CASCADE,
+    )
+
+    class Meta:
+        verbose_name = "issue due date"
+        verbose_name_plural = "issue due dates"
         ordering = ["project", "order", "name"]
         unique_together = ("project", "name")
 
@@ -775,10 +953,13 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
     default_options = JSONField(null=True, blank=True, verbose_name=_("default options"))
     epic_statuses = JSONField(null=True, blank=True, verbose_name=_("epic statuses"))
     us_statuses = JSONField(null=True, blank=True, verbose_name=_("us statuses"))
+    us_duedates = JSONField(null=True, blank=True, verbose_name=_("us duedates"))
     points = JSONField(null=True, blank=True, verbose_name=_("points"))
     task_statuses = JSONField(null=True, blank=True, verbose_name=_("task statuses"))
+    task_duedates = JSONField(null=True, blank=True, verbose_name=_("task duedates"))
     issue_statuses = JSONField(null=True, blank=True, verbose_name=_("issue statuses"))
     issue_types = JSONField(null=True, blank=True, verbose_name=_("issue types"))
+    issue_duedates = JSONField(null=True, blank=True, verbose_name=_("issue duedates"))
     priorities = JSONField(null=True, blank=True, verbose_name=_("priorities"))
     severities = JSONField(null=True, blank=True, verbose_name=_("severities"))
     roles = JSONField(null=True, blank=True, verbose_name=_("roles"))
@@ -850,6 +1031,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 "order": us_status.order,
             })
 
+        self.us_duedates = []
+        for us_duedate in project.us_duedates.all():
+            self.us_duedates.append({
+                "name": us_duedate.name,
+                "by_default": us_duedate.by_default,
+                "color": us_duedate.color,
+                "days_to_due": us_duedate.days_to_due,
+                "order": us_duedate.order,
+            })
+
         self.points = []
         for us_point in project.points.all():
             self.points.append({
@@ -868,6 +1059,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 "order": task_status.order,
             })
 
+        self.task_duedates = []
+        for task_duedate in project.task_duedates.all():
+            self.task_duedates.append({
+                "name": task_duedate.name,
+                "by_default": task_duedate.by_default,
+                "color": task_duedate.color,
+                "days_to_due": task_duedate.days_to_due,
+                "order": task_duedate.order,
+            })
+
         self.issue_statuses = []
         for issue_status in project.issue_statuses.all():
             self.issue_statuses.append({
@@ -884,6 +1085,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 "name": issue_type.name,
                 "color": issue_type.color,
                 "order": issue_type.order,
+            })
+
+        self.issue_duedates = []
+        for issue_duedate in project.issue_duedates.all():
+            self.issue_duedates.append({
+                "name": issue_duedate.name,
+                "by_default": issue_duedate.by_default,
+                "color": issue_duedate.color,
+                "days_to_due": issue_duedate.days_to_due,
+                "order": issue_duedate.order,
             })
 
         self.priorities = []
@@ -997,6 +1208,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 project=project
             )
 
+        for us_duedate in self.us_duedates:
+            UserStoryDueDate.objects.create(
+                name=us_duedate["name"],
+                by_default=us_duedate["by_default"],
+                color=us_duedate["color"],
+                days_to_due=us_duedate["days_to_due"],
+                order=us_duedate["order"],
+                project=project
+            )
+
         for point in self.points:
             Points.objects.create(
                 name=point["name"],
@@ -1015,6 +1236,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 project=project
             )
 
+        for task_duedate in self.task_duedates:
+            TaskDueDate.objects.create(
+                name=task_duedate["name"],
+                by_default=task_duedate["by_default"],
+                color=task_duedate["color"],
+                days_to_due=task_duedate["days_to_due"],
+                order=task_duedate["order"],
+                project=project
+            )
+
         for issue_status in self.issue_statuses:
             IssueStatus.objects.create(
                 name=issue_status["name"],
@@ -1030,6 +1261,16 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
                 name=issue_type["name"],
                 color=issue_type["color"],
                 order=issue_type["order"],
+                project=project
+            )
+
+        for issue_duedate in self.issue_duedates:
+            IssueDueDate.objects.create(
+                name=issue_duedate["name"],
+                by_default=issue_duedate["by_default"],
+                color=issue_duedate["color"],
+                days_to_due=issue_duedate["days_to_due"],
+                order=issue_duedate["order"],
                 project=project
             )
 
@@ -1062,7 +1303,6 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
         if self.epic_statuses:
             project.default_epic_status = EpicStatus.objects.get(name=self.default_options["epic_status"],
                                                                  project=project)
-
         if self.us_statuses:
             project.default_us_status = UserStoryStatus.objects.get(name=self.default_options["us_status"],
                                                                     project=project)
@@ -1076,15 +1316,12 @@ class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):
         if self.issue_statuses:
             project.default_issue_status = IssueStatus.objects.get(name=self.default_options["issue_status"],
                                                                    project=project)
-
         if self.issue_types:
             project.default_issue_type = IssueType.objects.get(name=self.default_options["issue_type"],
                                                                project=project)
-
         if self.priorities:
             project.default_priority = Priority.objects.get(name=self.default_options["priority"],
                                                             project=project)
-
         if self.severities:
             project.default_severity = Severity.objects.get(name=self.default_options["severity"],
                                                             project=project)

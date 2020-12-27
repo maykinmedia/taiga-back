@@ -16,6 +16,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from django.conf import settings
+
 import hashlib
 import functools
 import bleach
@@ -45,13 +47,13 @@ from markdown import Markdown
 from .extensions.autolink import AutolinkExtension
 from .extensions.automail import AutomailExtension
 from .extensions.semi_sane_lists import SemiSaneListExtension
-from .extensions.spaced_link import SpacedLinkExtension
 from .extensions.strikethrough import StrikethroughExtension
 from .extensions.wikilinks import WikiLinkExtension
 from .extensions.emojify import EmojifyExtension
 from .extensions.mentions import MentionsExtension
 from .extensions.references import TaigaReferencesExtension
 from .extensions.target_link import TargetBlankLinkExtension
+from .extensions.refresh_attachment import RefreshAttachmentExtension
 
 # Bleach configuration
 bleach.ALLOWED_TAGS += ["p", "table", "thead", "tbody", "th", "tr", "td", "h1",
@@ -70,13 +72,13 @@ def _make_extensions_list(project=None):
     return [AutolinkExtension(),
             AutomailExtension(),
             SemiSaneListExtension(),
-            SpacedLinkExtension(),
             StrikethroughExtension(),
             WikiLinkExtension(project),
             EmojifyExtension(),
-            MentionsExtension(),
+            MentionsExtension(project=project),
             TaigaReferencesExtension(project),
             TargetBlankLinkExtension(),
+            RefreshAttachmentExtension(project=project),
             "markdown.extensions.extra",
             "markdown.extensions.codehilite",
             "markdown.extensions.sane_lists",
@@ -90,8 +92,15 @@ import diff_match_patch
 def cache_by_sha(func):
     @functools.wraps(func)
     def _decorator(project, text):
+        if not settings.MDRENDER_CACHE_ENABLE:
+            return func(project, text)
+
+        # Avoid cache of too short texts
+        if len(text) <= settings.MDRENDER_CACHE_MIN_SIZE:
+            return func(project, text)
+
         sha1_hash = hashlib.sha1(force_bytes(text)).hexdigest()
-        key = "{}-{}".format(sha1_hash, project.id)
+        key = "mdrender/{}-{}".format(sha1_hash, project.id)
 
         # Try to get it from the cache
         cached = cache.get(key)
@@ -99,7 +108,7 @@ def cache_by_sha(func):
             return cached
 
         returned_value = func(project, text)
-        cache.set(key, returned_value, timeout=None)
+        cache.set(key, returned_value, timeout=settings.MDRENDER_CACHE_TIMEOUT)
         return returned_value
 
     return _decorator

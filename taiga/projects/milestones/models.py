@@ -38,10 +38,22 @@ class Milestone(WatchedModelMixin, models.Model):
     # TODO: Change the unique restriction to a unique together with the project id
     slug = models.SlugField(max_length=250, db_index=True, null=False, blank=True,
                             verbose_name=_("slug"))
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
-                              related_name="owned_milestones", verbose_name=_("owner"))
-    project = models.ForeignKey("projects.Project", null=False, blank=False,
-                                related_name="milestones", verbose_name=_("project"))
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        related_name="owned_milestones",
+        verbose_name=_("owner"),
+        on_delete=models.SET_NULL,
+    )
+    project = models.ForeignKey(
+        "projects.Project",
+        null=False,
+        blank=False,
+        related_name="milestones",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
     estimated_start = models.DateField(verbose_name=_("estimated start date"))
     estimated_finish = models.DateField(verbose_name=_("estimated finish date"))
     created_date = models.DateTimeField(null=False, blank=False,
@@ -63,9 +75,6 @@ class Milestone(WatchedModelMixin, models.Model):
         verbose_name_plural = "milestones"
         ordering = ["project", "created_date"]
         unique_together = [("name", "project"), ("slug", "project")]
-        permissions = (
-            ("view_milestone", "Can view milestone"),
-        )
 
     def __str__(self):
         return self.name
@@ -148,6 +157,17 @@ class Milestone(WatchedModelMixin, models.Model):
                     points_by_date += total_us_points / us_tasks_counter
 
                 self._total_closed_points_by_date[finished_date] = points_by_date
+
+            for us in self.cached_user_stories:
+                if us.num_tasks > 0 or us.finish_date is None:
+                    continue
+                finished_date = us.finish_date.date()
+                if finished_date < self.estimated_start:
+                    finished_date = self.estimated_start
+                points_by_date = self._total_closed_points_by_date.get(finished_date, 0)
+                points_by_date += us._total_us_points
+                self._total_closed_points_by_date[finished_date] = points_by_date
+
 
             # At this point self._total_closed_points_by_date keeps a dict where the
             # finished date of the task is the key and the value is the increment of points

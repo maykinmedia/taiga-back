@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .development import *
+from .development import *  # noqa, pylint: disable=unused-wildcard-import
 
 #########################################
 ## GENERIC
@@ -76,8 +76,8 @@ DATABASES = {
 #    "user-update": None,
 #}
 
-# This list should containt:
-#  - Tiga users IDs
+# This list should contain:
+#  - Taiga users IDs
 #  - Valid clients IP addresses (X-Forwarded-For header)
 #REST_FRAMEWORK["DEFAULT_THROTTLE_WHITELIST"] = []
 
@@ -92,6 +92,7 @@ DATABASES = {
 # EMAIL SETTINGS EXAMPLE
 #EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 #EMAIL_USE_TLS = False
+#EMAIL_USE_SSL = False # You cannot use both (TLS and SSL) at the same time!
 #EMAIL_HOST = 'localhost'
 #EMAIL_PORT = 25
 #EMAIL_HOST_USER = 'user'
@@ -152,7 +153,7 @@ DATABASES = {
 #########################################
 
 #STATS_ENABLED = False
-#FRONT_SITEMAP_CACHE_TIMEOUT = 60*60  # In second
+#STATS_CACHE_TIMEOUT = 60*60  # In second
 
 
 #########################################

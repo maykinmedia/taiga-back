@@ -19,7 +19,6 @@
 
 import pytest
 import time
-import math
 import base64
 import datetime
 import hashlib
@@ -29,23 +28,22 @@ import pytz
 
 from unittest.mock import MagicMock, patch
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils import timezone
 
 from django.apps import apps
 from .. import factories as f
 
+from taiga.base.api.settings import api_settings
 from taiga.base.utils import json
 from taiga.projects.notifications import services
-from taiga.projects.notifications import utils
 from taiga.projects.notifications import models
 from taiga.projects.notifications.choices import NotifyLevel
+from taiga.projects.notifications.choices import WebNotificationType
 from taiga.projects.history.choices import HistoryType
 from taiga.projects.history.services import take_snapshot
-from taiga.projects.issues.serializers import IssueSerializer
-from taiga.projects.userstories.serializers import UserStorySerializer
-from taiga.projects.tasks.serializers import TaskSerializer
 from taiga.permissions.choices import MEMBERS_PERMISSIONS
+from taiga.users.gravatar import get_user_gravatar_id
 
 pytestmark = pytest.mark.django_db
 
@@ -55,6 +53,20 @@ def mail():
     from django.core import mail
     mail.outbox = []
     return mail
+
+
+@pytest.mark.parametrize(
+    "header, expected",
+    [
+        ("", ""),
+        ("One line", "One line"),
+        ("Two \nlines", "Two lines"),
+        ("Mix \r\nCR and LF \rin the string", "Mix CR and LF in the string"),
+    ]
+)
+def test_remove_lr_cr(header, expected):
+    rv = services.remove_lr_cr(header)
+    assert rv == expected
 
 
 def test_create_retrieve_notify_policy():
@@ -82,17 +94,21 @@ def test_notify_policy_existence():
 def test_analize_object_for_watchers():
     user1 = f.UserFactory.create()
     user2 = f.UserFactory.create()
+    project = f.ProjectFactory.create()
 
-    issue = MagicMock()
-    issue.description = "Foo @{0} @{1} ".format(user1.username,
-                                                user2.username)
-    issue.content = ""
+    f.MembershipFactory(user=user1, project=project)
+
+    issue = f.IssueFactory(
+        project=project,
+        description="Foo @{0} @{1} ".format(user1.username, user2.username),
+    )
+    issue.add_watcher = MagicMock()
 
     history = MagicMock()
     history.comment = ""
 
     services.analize_object_for_watchers(issue, history.comment, history.owner)
-    assert issue.add_watcher.call_count == 2
+    assert issue.add_watcher.call_count == 1
 
 
 def test_analize_object_for_watchers_adding_owner_non_empty_comment():
@@ -359,7 +375,7 @@ def test_send_notifications_using_services_method_for_user_stories(settings, mai
     history_change = f.HistoryEntryFactory.create(
         project=project,
         user={"pk": member1.user.id},
-        comment="",
+        comment="test:change",
         type=HistoryType.change,
         key="userstories.userstory:{}".format(us.id),
         is_hidden=False,
@@ -454,7 +470,7 @@ def test_send_notifications_using_services_method_for_tasks(settings, mail):
     history_change = f.HistoryEntryFactory.create(
         project=project,
         user={"pk": member1.user.id},
-        comment="",
+        comment="test:change",
         type=HistoryType.change,
         key="tasks.task:{}".format(task.id),
         is_hidden=False,
@@ -549,7 +565,7 @@ def test_send_notifications_using_services_method_for_issues(settings, mail):
     history_change = f.HistoryEntryFactory.create(
         project=project,
         user={"pk": member1.user.id},
-        comment="",
+        comment="test:change",
         type=HistoryType.change,
         key="issues.issue:{}".format(issue.id),
         is_hidden=False,
@@ -644,7 +660,7 @@ def test_send_notifications_using_services_method_for_wiki_pages(settings, mail)
     history_change = f.HistoryEntryFactory.create(
         project=project,
         user={"pk": member1.user.id},
-        comment="",
+        comment="test:change",
         type=HistoryType.change,
         key="wiki.wikipage:{}".format(wiki.id),
         is_hidden=False,
@@ -1074,3 +1090,371 @@ def parse_ms_thread_index(index):
         ts.append(ts[-1] + datetime.timedelta(microseconds=(f << 18)//10))
 
     return guid, ts
+
+
+def _notification_data(project, user, obj, content_type):
+    return {
+        "project": {
+            "id": project.pk,
+            "slug": project.slug,
+            "name": project.name,
+        },
+        "obj": {
+            "id": obj.pk,
+            "ref": obj.ref,
+            "subject": obj.subject,
+            "content_type": content_type,
+        },
+        "user": {
+            'big_photo': None,
+            'date_joined': user.date_joined.strftime(
+                api_settings.DATETIME_FORMAT),
+            'gravatar_id': get_user_gravatar_id(user),
+            'id': user.pk,
+            'is_profile_visible': True,
+            'name': user.get_full_name(),
+            'photo': None,
+            'username': user.username
+        },
+    }
+
+
+def test_issue_updated_generates_web_notifications(client):
+    project = f.ProjectFactory.create()
+    role = f.RoleFactory.create(
+        project=project,
+        permissions=['view_issues', 'modify_issue']
+    )
+    member1 = f.MembershipFactory.create(project=project, role=role)
+    member2 = f.MembershipFactory.create(project=project, role=role)
+    member3 = f.MembershipFactory.create(project=project, role=role)
+    member4 = f.MembershipFactory.create(project=project, role=role)
+    issue = f.IssueFactory.create(project=project, owner=member1.user)
+
+    client.login(member1.user)
+    mock_path = "taiga.projects.issues.api.IssueViewSet.pre_conditions_on_save"
+    with patch(mock_path):
+       client.patch(
+            reverse("issues-detail", args=[issue.pk]),
+            json.dumps({
+                "description": "Lorem ipsum @%s dolor sit amet" %
+                               member4.user.username,
+                "assigned_to": member2.user.pk,
+                "watchers": [member3.user.pk],
+                "version": issue.version
+            }),
+            content_type="application/json"
+        )
+
+    assert 3 == models.WebNotification.objects.count()
+
+    notifications = models.WebNotification.objects.all()
+    notification_data = _notification_data(project, member1.user, issue,
+                                           'issue')
+    # Notification assigned_to
+    assert notifications[0].user == member2.user
+    assert notifications[0].event_type == WebNotificationType.assigned.value
+    assert notifications[0].read is None
+    assert notifications[0].data == notification_data
+
+    # Notification added_as_watcher
+    assert notifications[1].user == member3.user
+    assert notifications[1].event_type == WebNotificationType.added_as_watcher
+    assert notifications[1].read is None
+    assert notifications[1].data == notification_data
+
+    # Notification mentioned
+    assert notifications[2].user == member4.user
+    assert notifications[2].event_type == WebNotificationType.mentioned
+    assert notifications[2].read is None
+    assert notifications[2].data == notification_data
+
+
+def test_comment_on_issue_generates_web_notifications(client):
+    project = f.ProjectFactory.create()
+    role = f.RoleFactory.create(
+        project=project,
+        permissions=['view_issues', 'modify_issue']
+    )
+    member1 = f.MembershipFactory.create(project=project, role=role)
+    member2 = f.MembershipFactory.create(project=project, role=role)
+    issue = f.IssueFactory.create(project=project, owner=member1.user)
+    issue.add_watcher(member2.user)
+
+    client.login(member1.user)
+    mock_path = "taiga.projects.issues.api.IssueViewSet.pre_conditions_on_save"
+    with patch(mock_path):
+        client.patch(
+            reverse("issues-detail", args=[issue.pk]),
+            json.dumps({
+                "version": issue.version,
+                "comment": "Lorem ipsum dolor sit amet",
+            }),
+            content_type="application/json"
+        )
+
+    assert 1 == models.WebNotification.objects.count()
+
+    notification = models.WebNotification.objects.first()
+    notification_data = _notification_data(project, member1.user, issue,
+                                           'issue')
+
+    # Notification comment
+    assert notification.user == member2.user
+    assert notification.event_type == WebNotificationType.comment
+    assert notification.read is None
+    assert notification.data == notification_data
+
+
+def test_task_updated_generates_web_notifications(client):
+    project = f.ProjectFactory.create()
+    role = f.RoleFactory.create(
+        project=project,
+        permissions=['view_tasks', 'modify_task']
+    )
+    member1 = f.MembershipFactory.create(project=project, role=role)
+    member2 = f.MembershipFactory.create(project=project, role=role)
+    member3 = f.MembershipFactory.create(project=project, role=role)
+    member4 = f.MembershipFactory.create(project=project, role=role)
+    task = f.TaskFactory.create(project=project, owner=member1.user)
+
+    client.login(member1.user)
+    mock_path = "taiga.projects.tasks.api.TaskViewSet.pre_conditions_on_save"
+    with patch(mock_path):
+        client.patch(
+            reverse("tasks-detail", args=[task.pk]),
+            json.dumps({
+                "description": "Lorem ipsum @%s dolor sit amet" %
+                               member4.user.username,
+                "assigned_to": member2.user.pk,
+                "watchers": [member3.user.pk],
+                "version": task.version
+            }),
+            content_type="application/json"
+        )
+
+    assert 3 == models.WebNotification.objects.count()
+
+    notifications = models.WebNotification.objects.all()
+    notification_data = _notification_data(project, member1.user, task, 'task')
+
+    # Notification assigned_to
+    assert notifications[0].user == member2.user
+    assert notifications[0].event_type == WebNotificationType.assigned.value
+    assert notifications[0].read is None
+    assert notifications[0].data == notification_data
+
+    # Notification added_as_watcher
+    assert notifications[1].user == member3.user
+    assert notifications[1].event_type == WebNotificationType.added_as_watcher
+    assert notifications[1].read is None
+    assert notifications[1].data == notification_data
+
+    # Notification mentioned
+    assert notifications[2].user == member4.user
+    assert notifications[2].event_type == WebNotificationType.mentioned
+    assert notifications[2].read is None
+    assert notifications[2].data == notification_data
+
+
+def test_comment_on_task_generates_web_notifications(client):
+    project = f.ProjectFactory.create()
+    role = f.RoleFactory.create(
+        project=project,
+        permissions=['view_tasks', 'modify_task']
+    )
+    member1 = f.MembershipFactory.create(project=project, role=role)
+    member2 = f.MembershipFactory.create(project=project, role=role)
+    task = f.TaskFactory.create(project=project, owner=member1.user)
+    task.add_watcher(member2.user)
+
+    client.login(member1.user)
+    mock_path = "taiga.projects.tasks.api.TaskViewSet.pre_conditions_on_save"
+    with patch(mock_path):
+        client.patch(
+            reverse("tasks-detail", args=[task.pk]),
+            json.dumps({
+                "version": task.version,
+                "comment": "Lorem ipsum dolor sit amet",
+            }),
+            content_type="application/json"
+        )
+
+    assert 1 == models.WebNotification.objects.count()
+
+    notification = models.WebNotification.objects.first()
+    notification_data = _notification_data(project, member1.user, task, 'task')
+
+    # Notification comment
+    assert notification.user == member2.user
+    assert notification.event_type == WebNotificationType.comment
+    assert notification.read is None
+    assert notification.data == notification_data
+
+
+def test_us_updated_generates_web_notifications(client):
+    project = f.ProjectFactory.create()
+    role = f.RoleFactory.create(
+        project=project,
+        permissions=['view_us', 'modify_us']
+    )
+    member1 = f.MembershipFactory.create(project=project, role=role)
+    member2 = f.MembershipFactory.create(project=project, role=role)
+    member3 = f.MembershipFactory.create(project=project, role=role)
+    member4 = f.MembershipFactory.create(project=project, role=role)
+
+    us = f.create_userstory(
+        project=project,
+        owner=member1.user,
+        assigned_to=member2.user,
+        assigned_users =[],
+        milestone=None
+    )
+
+    client.login(member1.user)
+    mock_path = "taiga.projects.userstories.api.UserStoryViewSet." \
+                "pre_conditions_on_save"
+    with patch(mock_path):
+        client.patch(
+            reverse("userstories-detail", args=[us.pk]),
+            json.dumps({
+                "description": "Lorem ipsum @%s dolor sit amet" %
+                               member4.user.username,
+                "watchers": [member3.user.pk],
+                "version": us.version
+            }),
+            content_type="application/json"
+        )
+
+    assert 2 == models.WebNotification.objects.count()
+
+    notifications = models.WebNotification.objects.all()
+    notification_data = _notification_data(project, member1.user, us,
+                                           'userstory')
+
+    # Notification added_as_watcher
+    assert notifications[0].user == member3.user
+    assert notifications[0].event_type == WebNotificationType.added_as_watcher
+    assert notifications[0].read is None
+    assert notifications[0].data == notification_data
+
+    # Notification mentioned
+    assert notifications[1].user == member4.user
+    assert notifications[1].event_type == WebNotificationType.mentioned
+    assert notifications[1].read is None
+    assert notifications[1].data == notification_data
+
+
+def test_us_updated_generates_web_notifications_asigned_users(client):
+    project = f.ProjectFactory.create()
+    role = f.RoleFactory.create(
+        project=project,
+        permissions=['view_us', 'modify_us']
+    )
+    member1 = f.MembershipFactory.create(project=project, role=role)
+    member2 = f.MembershipFactory.create(project=project, role=role)
+
+    us = f.create_userstory(project=project, owner=member1.user, milestone=None)
+
+    client.login(member1.user)
+    mock_path = "taiga.projects.userstories.api.UserStoryViewSet." \
+                "pre_conditions_on_save"
+    with patch(mock_path):
+        client.patch(
+            reverse("userstories-detail", args=[us.pk]),
+            json.dumps({
+                "assigned_users": [member2.user.pk],
+                "version": us.version
+            }),
+            content_type="application/json"
+        )
+
+    assert 1 == models.WebNotification.objects.count()
+
+    notifications = models.WebNotification.objects.all()
+    notification_data = _notification_data(project, member1.user, us, 'userstory')
+
+    assert notifications[0].user == member2.user
+    assert notifications[0].event_type == WebNotificationType.assigned.value
+    assert notifications[0].read is None
+    assert notifications[0].data == notification_data
+
+def test_comment_on_us_generates_web_notifications(client):
+    project = f.ProjectFactory.create()
+    role = f.RoleFactory.create(
+        project=project,
+        permissions=['view_us', 'modify_us']
+    )
+    member1 = f.MembershipFactory.create(project=project, role=role)
+    member2 = f.MembershipFactory.create(project=project, role=role)
+
+    us = f.create_userstory(project=project, owner=member1.user, milestone=None)
+    us.add_watcher(member2.user)
+
+    client.login(member1.user)
+    mock_path = "taiga.projects.userstories.api.UserStoryViewSet." \
+                "pre_conditions_on_save"
+    with patch(mock_path):
+        client.patch(
+            reverse("userstories-detail", args=[us.pk]),
+            json.dumps({
+                "version": us.version,
+                "comment": "Lorem ipsum dolor sit amet",
+            }),
+            content_type="application/json"
+        )
+
+    assert 1 == models.WebNotification.objects.count()
+
+    notification = models.WebNotification.objects.first()
+    notification_data = _notification_data(project, member1.user, us,
+                                           'userstory')
+
+    # Notification comment
+    assert notification.user == member2.user
+    assert notification.event_type == WebNotificationType.comment
+    assert notification.read is None
+    assert notification.data == notification_data
+
+
+def test_new_member_generates_web_notifications(client):
+    project = f.ProjectFactory()
+    john = f.UserFactory.create()
+    joseph = f.UserFactory.create()
+    other = f.UserFactory.create()
+    tester = f.RoleFactory(project=project, name="Tester",
+                           permissions=["view_project"])
+    gamer = f.RoleFactory(project=project, name="Gamer",
+                          permissions=["view_project"])
+    f.MembershipFactory(project=project, user=john, role=tester, is_admin=True)
+
+    # John and Other are members from another project
+    project2 = f.ProjectFactory()
+    f.MembershipFactory(project=project2, user=john, role=gamer, is_admin=True)
+    f.MembershipFactory(project=project2, user=other, role=gamer)
+
+    url = reverse("memberships-bulk-create")
+
+    data = {
+        "project_id": project.id,
+        "bulk_memberships": [
+            {"role_id": gamer.pk, "username": joseph.email},
+            {"role_id": gamer.pk, "username": other.username},
+        ]
+    }
+    client.login(john)
+    client.json.post(url, json.dumps(data))
+
+    assert models.WebNotification.objects.count() == 2
+
+    notifications = models.WebNotification.objects.all()
+
+    # Notification added_as_member
+    assert notifications[0].user == joseph
+    assert notifications[0].event_type == WebNotificationType.added_as_member
+    assert notifications[0].read is None
+
+    # Notification added_as_member
+    assert notifications[1].user == other
+    assert notifications[1].event_type == WebNotificationType.added_as_member
+    assert notifications[1].read is None

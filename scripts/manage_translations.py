@@ -98,6 +98,7 @@ def update_catalogs(resources=None, languages=None):
         "no_obsolete": False,
         "keep_pot": False,
         "verbosity": 0,
+        "add_location": None,
     }
 
     if resources is not None:
@@ -242,11 +243,7 @@ You need transifex-client, install it.
 
  1. Install transifex-client, use
 
-       $ pip install --upgrade -r requirements-devel.txt
-
-    or
-
-       $ pip install --upgrade transifex-client==0.12.2
+       $ pip install --upgrade transifex-client
 
  2. Create ~/.transifexrc file:
 

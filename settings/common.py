@@ -70,7 +70,7 @@ LANGUAGE_CODE = 'en-us'
 # Languages we provide translations for, out of the box.
 LANGUAGES = [
     #("af", "Afrikaans"),  # Afrikaans
-    #("ar", "العربية‏"),  # Arabic
+    ("ar", "العربية‏"),  # Arabic
     #("ast", "Asturiano"),  # Asturian
     #("az", "Azərbaycan dili"),  # Azerbaijani
     #("bg", "Български"),  # Bulgarian
@@ -94,14 +94,14 @@ LANGUAGES = [
     #("es-ni", "Español (Nicaragua)"),  # Nicaraguan Spanish
     #("es-ve", "Español (Venezuela)"),  # Venezuelan Spanish
     #("et", "Eesti"),  # Estonian
-    #("eu", "Euskara"),  # Basque
-    #("fa", "فارسی‏"),  # Persian
+    ("eu", "Euskara"),  # Basque
+    ("fa", "فارسی‏"),  # Persian
     ("fi", "Suomi"),  # Finnish
     ("fr", "Français"),  # French
     #("fy", "Frysk"),  # Frisian
     #("ga", "Irish"),  # Irish
     #("gl", "Galego"),  # Galician
-    #("he", "עברית‏"),  # Hebrew
+    ("he", "עברית‏"),  # Hebrew
     #("hi", "हिन्दी"),  # Hindi
     #("hr", "Hrvatski"),  # Croatian
     #("hu", "Magyar"),  # Hungarian
@@ -118,7 +118,7 @@ LANGUAGES = [
     ("ko", "한국어"),  # Korean
     #("lb", "Lëtzebuergesch"),  # Luxembourgish
     #("lt", "Lietuvių"),  # Lithuanian
-    #("lv", "Latviešu"),  # Latvian
+    ("lv", "Latviešu"),  # Latvian
     #("mk", "Македонски"),  # Macedonian
     #("ml", "മലയാളം"),  # Malayalam
     #("mn", "Монгол"),  # Mongolian
@@ -148,7 +148,7 @@ LANGUAGES = [
     ("tr", "Türkçe"),  # Turkish
     #("tt", "татар теле"),  # Tatar
     #("udm", "удмурт кыл"),  # Udmurt
-    #("uk", "Українська"),  # Ukrainian
+    ("uk", "Українська"),  # Ukrainian
     #("ur", "اردو‏"),  # Urdu
     #("vi", "Tiếng Việt"),  # Vietnamese
     ("zh-hans", "中文(简体)"),  # Simplified Chinese
@@ -211,8 +211,10 @@ STATICFILES_DIRS = (
     # Don't forget to use absolute paths, not relative paths.
 )
 
-# Defautl storage
+# Default storage
 DEFAULT_FILE_STORAGE = "taiga.base.storage.FileSystemStorage"
+
+FILE_UPLOAD_PERMISSIONS = 0o644
 
 SECRET_KEY = "aw3+t2r(8(0kkrhg8)gx6i96v5^kv%6cfep9wxfom0%7dy0m9e"
 
@@ -257,8 +259,8 @@ TEMPLATES = [
 ]
 
 
-MIDDLEWARE_CLASSES = [
-    "taiga.base.middleware.cors.CoorsMiddleware",
+MIDDLEWARE = [
+    "taiga.base.middleware.cors.CorsMiddleware",
     "taiga.events.middleware.SessionIDMiddleware",
 
     # Common middlewares
@@ -307,6 +309,7 @@ INSTALLED_APPS = [
     "taiga.projects.issues",
     "taiga.projects.wiki",
     "taiga.projects.contact",
+    "taiga.projects.settings",
     "taiga.searches",
     "taiga.timeline",
     "taiga.mdrender",
@@ -467,9 +470,13 @@ APP_EXTRA_EXPOSE_HEADERS = [
 ]
 
 DEFAULT_PROJECT_TEMPLATE = "scrum"
+# Setting DEFAULT_PROJECT_SLUG_PREFIX to false removes the username from project slug
+DEFAULT_PROJECT_SLUG_PREFIX = True
 PUBLIC_REGISTER_ENABLED = False
 # None or [] values in USER_EMAIL_ALLOWED_DOMAINS means allow any domain
 USER_EMAIL_ALLOWED_DOMAINS = None
+
+PRIVATE_USER_PROFILES = False
 
 SEARCHES_MAX_RESULTS = 150
 
@@ -545,6 +552,7 @@ EXPORTS_TTL = 60 * 60 * 24  # 24 hours
 
 CELERY_ENABLED = False
 WEBHOOKS_ENABLED = False
+WEBHOOKS_BLOCK_PRIVATE_ADDRESS = False
 
 
 # If is True /front/sitemap.xml show a valid sitemap of taiga-front client
@@ -594,3 +602,11 @@ if "test" in sys.argv:
     print ("\033[1;91mNo django tests.\033[0m")
     print ("Try: \033[1;33mpy.test\033[0m")
     sys.exit(0)
+
+# Configuration for sending notifications
+NOTIFICATIONS_CUSTOM_FILTER = False
+
+# MDRENDER
+MDRENDER_CACHE_ENABLE = True
+MDRENDER_CACHE_MIN_SIZE = 40
+MDRENDER_CACHE_TIMEOUT = 86400

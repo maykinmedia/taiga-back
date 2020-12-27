@@ -84,9 +84,19 @@ class PointsValidator(DuplicatedNameInProjectValidator, validators.ModelValidato
         model = models.Points
 
 
+class UserStoryDueDateValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
+    class Meta:
+        model = models.UserStoryDueDate
+
+
 class TaskStatusValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
     class Meta:
         model = models.TaskStatus
+
+
+class TaskDueDateValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
+    class Meta:
+        model = models.TaskDueDate
 
 
 class SeverityValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
@@ -107,6 +117,15 @@ class IssueStatusValidator(DuplicatedNameInProjectValidator, validators.ModelVal
 class IssueTypeValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
     class Meta:
         model = models.IssueType
+
+
+class IssueDueDateValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
+    class Meta:
+        model = models.IssueDueDate
+
+
+class DueDatesCreationValidator(ProjectExistsValidator, validators.Validator):
+    project_id = serializers.IntegerField()
 
 
 ######################################################
@@ -144,6 +163,13 @@ class MembershipValidator(validators.ModelValidator):
         if qs.count() > 0:
             raise ValidationError(_("The user yet exists in the project"))
 
+    def validate_project(self, attrs, source):
+        # Create only
+        if self.object is not None and self.object.project != attrs.get("project"):
+            raise ValidationError(_("Invalid operation"))
+
+        return attrs
+
     def validate_role(self, attrs, source):
         project = attrs.get("project", None if self.object is None else self.object.project)
         if project is None:
@@ -164,7 +190,7 @@ class MembershipValidator(validators.ModelValidator):
         except ValidationError:
             # If the validation comes from a request let's check the user is a valid contact
             request = self.context.get("request", None)
-            if request is not None and request.user.is_authenticated():
+            if request is not None and request.user.is_authenticated:
                 valid_usernames = request.user.contacts_visible_by_user(request.user).values_list("username", flat=True)
                 if username not in valid_usernames:
                     raise ValidationError(_("The user must be a valid contact"))
@@ -197,6 +223,13 @@ class MembershipValidator(validators.ModelValidator):
 
         return attrs
 
+    def validate(self, attrs):
+        request = self.context.get("request", None)
+        if request is not None and request.user.is_authenticated and not request.user.verified_email:
+            raise ValidationError(_("To add members to a project, first you have to verify your email address"))
+
+        return super().validate(attrs)
+
     def is_valid(self):
         errors = super().is_valid()
         if hasattr(self, "email") and self.object is not None:
@@ -219,7 +252,7 @@ class _MemberBulkValidator(validators.Validator):
         except InvalidEmailValidationError:
             # If the validation comes from a request let's check the user is a valid contact
             request = self.context.get("request", None)
-            if request is not None and request.user.is_authenticated():
+            if request is not None and request.user.is_authenticated:
                 valid_usernames = set(request.user.contacts_visible_by_user(request.user).values_list("username", flat=True))
                 if username not in valid_usernames:
                     raise ValidationError(_("The user must be a valid contact"))

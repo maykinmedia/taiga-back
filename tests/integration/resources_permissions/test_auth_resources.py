@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 
 from taiga.base.utils import json
 
@@ -61,6 +61,7 @@ def test_auth_action_register(client, settings):
         "password": "test",
         "full_name": "test",
         "email": "test@test.com",
+        "accepted_terms": True,
     })
 
     result = client.post(url, register_data, content_type="application/json")

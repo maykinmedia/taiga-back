@@ -71,8 +71,8 @@ def _get_validation_exclusions(obj, pk=None, slug_field=None, lookup_field=None)
     if pk:
         # Pending deprecation
         pk_field = obj._meta.pk
-        while pk_field.rel:
-            pk_field = pk_field.rel.to._meta.pk
+        while pk_field.remote_field:
+            pk_field = pk_field.remote_field.model._meta.pk
         include.append(pk_field.name)
 
     if slug_field:
@@ -168,11 +168,15 @@ class UpdateModelMixin:
     @model_pk_lock
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
-        self.object = self.get_object_or_none()
+        if not getattr(self, 'object', None):
+            self.object = self.get_object_or_none()
         self.check_permissions(request, 'update', self.object)
 
         if self.object is None:
             raise Http404
+
+        if hasattr(self, 'pre_validate'):
+            self.pre_validate()
 
         validator = self.get_validator(self.object, data=request.DATA,
                                        files=request.FILES, partial=partial)
@@ -188,13 +192,6 @@ class UpdateModelMixin:
             # full_clean on model instance may be called in pre_save,
             # so we have to handle eventual errors.
             return response.BadRequest(err.message_dict)
-
-        if self.object is None:
-            self.object = validator.save(force_insert=True)
-            self.post_save(self.object, created=True)
-            instance = self.get_queryset().get(id=self.object.id)
-            serializer = self.get_serializer(instance)
-            return response.Created(serializer.data)
 
         self.object = validator.save(force_update=True)
         self.post_save(self.object, created=False)

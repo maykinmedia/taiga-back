@@ -43,10 +43,20 @@ from taiga.userstorage.api import StorageEntriesViewSet
 router.register(r"user-storage", StorageEntriesViewSet, base_name="user-storage")
 
 
-# Notify policies
+# Notifications & Notify policies
 from taiga.projects.notifications.api import NotifyPolicyViewSet
+from taiga.projects.notifications.api import WebNotificationsViewSet
 
 router.register(r"notify-policies", NotifyPolicyViewSet, base_name="notifications")
+router.register(r"web-notifications", WebNotificationsViewSet, base_name="web-notifications")
+router.register(r"web-notifications/set-as-read", WebNotificationsViewSet, base_name="web-notifications")
+router.register(r"web-notifications/(?P<resource_id>\d+)/set-as-read", WebNotificationsViewSet, base_name="web-notifications")
+
+# Project settings
+from taiga.projects.settings.api import UserProjectSettingsViewSet, SectionsViewSet
+
+router.register(r"user-project-settings", UserProjectSettingsViewSet, base_name="user-project-settings")
+router.register(r"sections", SectionsViewSet, base_name="sections")
 
 
 # Projects & Selectors
@@ -58,9 +68,12 @@ from taiga.projects.api import InvitationViewSet
 from taiga.projects.api import EpicStatusViewSet
 from taiga.projects.api import UserStoryStatusViewSet
 from taiga.projects.api import PointsViewSet
+from taiga.projects.api import UserStoryDueDateViewSet
 from taiga.projects.api import TaskStatusViewSet
+from taiga.projects.api import TaskDueDateViewSet
 from taiga.projects.api import IssueStatusViewSet
 from taiga.projects.api import IssueTypeViewSet
+from taiga.projects.api import IssueDueDateViewSet
 from taiga.projects.api import PriorityViewSet
 from taiga.projects.api import SeverityViewSet
 from taiga.projects.api import ProjectTemplateViewSet
@@ -74,9 +87,12 @@ router.register(r"invitations", InvitationViewSet, base_name="invitations")
 router.register(r"epic-statuses", EpicStatusViewSet, base_name="epic-statuses")
 router.register(r"userstory-statuses", UserStoryStatusViewSet, base_name="userstory-statuses")
 router.register(r"points", PointsViewSet, base_name="points")
+router.register(r"userstory-due-dates", UserStoryDueDateViewSet, base_name="userstory-due-dates")
 router.register(r"task-statuses", TaskStatusViewSet, base_name="task-statuses")
+router.register(r"task-due-dates", TaskDueDateViewSet, base_name="task-due-dates")
 router.register(r"issue-statuses", IssueStatusViewSet, base_name="issue-statuses")
 router.register(r"issue-types", IssueTypeViewSet, base_name="issue-types")
+router.register(r"issue-due-dates", IssueDueDateViewSet, base_name="issue-due-dates")
 router.register(r"priorities", PriorityViewSet, base_name="priorities")
 router.register(r"severities",SeverityViewSet , base_name="severities")
 
@@ -209,6 +225,13 @@ router.register(r"wiki/(?P<resource_id>\d+)/watchers", WikiWatchersViewSet,
                 base_name="wiki-watchers")
 router.register(r"wiki-links", WikiLinkViewSet,
                 base_name="wiki-links")
+
+
+# Delete owned projects
+from taiga.projects.api import DeleteOwnProjectsViewSet
+
+router.register(r"delete-owned-projects", DeleteOwnProjectsViewSet,
+                base_name="delete-owned-projects")
 
 
 # History & Components

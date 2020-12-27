@@ -152,7 +152,7 @@ EMOJIS_SET = {
 
 class EmojifyExtension(Extension):
 
-    def extendMarkdown(self, md, md_globals):
+    def extendMarkdown(self, md):
         md.registerExtension(self)
         md.preprocessors.add('emojify',
                              EmojifyPreprocessor(md),
@@ -162,7 +162,7 @@ class EmojifyExtension(Extension):
 class EmojifyPreprocessor(Preprocessor):
 
     def run(self, lines):
-        pattern = re.compile(':([a-z0-9\+\-_]+):')
+        pattern = re.compile(r':([a-z0-9\+\-_]+):')
 
         new_lines = []
 

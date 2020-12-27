@@ -39,6 +39,7 @@ from taiga.projects.history.services import take_snapshot
 from taiga.projects.milestones.models import Milestone
 from taiga.projects.mixins.by_ref import ByRefMixin
 from taiga.projects.models import Project, UserStoryStatus
+from taiga.projects.notifications.mixins import AssignedUsersSignalMixin
 from taiga.projects.notifications.mixins import WatchedResourceMixin
 from taiga.projects.notifications.mixins import WatchersViewSetMixin
 from taiga.projects.occ import OCCResourceMixin
@@ -55,16 +56,20 @@ from . import services
 from . import validators
 
 
-class UserStoryViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, WatchedResourceMixin,
-                       ByRefMixin, TaggedResourceMixin, BlockedByProjectMixin, ModelCrudViewSet):
+class UserStoryViewSet(AssignedUsersSignalMixin, OCCResourceMixin,
+                       VotedResourceMixin, HistoryResourceMixin,
+                       WatchedResourceMixin, ByRefMixin, TaggedResourceMixin,
+                       BlockedByProjectMixin, ModelCrudViewSet):
     validator_class = validators.UserStoryValidator
     queryset = models.UserStory.objects.all()
     permission_classes = (permissions.UserStoryPermission,)
     filter_backends = (base_filters.CanViewUsFilterBackend,
                        filters.EpicFilter,
+                       base_filters.UserStoriesRoleFilter,
                        base_filters.OwnersFilter,
                        base_filters.AssignedToFilter,
-                       base_filters.StatusesFilter,
+                       base_filters.AssignedUsersFilter,
+                       base_filters.UserStoryStatusesFilter,
                        base_filters.TagsFilter,
                        base_filters.WatchersFilter,
                        base_filters.QFilter,
@@ -85,11 +90,21 @@ class UserStoryViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixi
                        "sprint_order",
                        "kanban_order",
                        "epic_order",
+                       "project",
+                       "milestone",
+                       "status",
+                       "created_date",
+                       "modified_date",
+                       "assigned_to",
+                       "subject",
                        "total_voters"]
 
     def get_serializer_class(self, *args, **kwargs):
         if self.action in ["retrieve", "by_ref"]:
             return serializers.UserStoryNeighborsSerializer
+
+        if self.action == "list" and self.request.QUERY_PARAMS.get('dashboard', False):
+            return serializers.UserStoryLightSerializer
 
         if self.action == "list":
             return serializers.UserStoryListSerializer
@@ -98,28 +113,31 @@ class UserStoryViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixi
 
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = qs.select_related("milestone",
-                               "project",
+        qs = qs.select_related("project",
                                "status",
-                               "owner",
-                               "assigned_to",
-                               "generated_from_issue")
+                               "assigned_to")
 
-        include_attachments = "include_attachments" in self.request.QUERY_PARAMS
-        include_tasks = "include_tasks" in self.request.QUERY_PARAMS
+        if not self.request.QUERY_PARAMS.get('dashboard', False):
+            qs = qs.select_related("milestone",
+                                   "owner",
+                                   "generated_from_issue",
+                                   "generated_from_task")
 
-        epic_id = self.request.QUERY_PARAMS.get("epic", None)
-        # We can be filtering by more than one epic so epic_id can consist
-        # of different ids separete by comma. In that situation we will use
-        # only the first
-        if epic_id is not None:
-            epic_id = epic_id.split(",")[0]
+            qs = qs.prefetch_related("assigned_users")
+            include_attachments = "include_attachments" in self.request.QUERY_PARAMS
+            include_tasks = "include_tasks" in self.request.QUERY_PARAMS
 
-        qs = attach_extra_info(qs, user=self.request.user,
-                               include_attachments=include_attachments,
-                               include_tasks=include_tasks,
-                               epic_id=epic_id)
+            epic_id = self.request.QUERY_PARAMS.get("epic", None)
+            # We can be filtering by more than one epic so epic_id can consist
+            # of different ids separete by comma. In that situation we will use
+            # only the first
+            if epic_id is not None:
+                epic_id = epic_id.split(",")[0]
 
+            qs = attach_extra_info(qs, user=self.request.user,
+                                   include_attachments=include_attachments,
+                                   include_tasks=include_tasks,
+                                   epic_id=epic_id)
         return qs
 
     def pre_conditions_on_save(self, obj):
@@ -159,16 +177,17 @@ class UserStoryViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixi
 
         if obj.kanban_order == -1:
             if self._max_order:
-                obj.kanban_order = self._max_order + 1;
+                obj.kanban_order = self._max_order + 1
 
         if not obj.id:
             obj.owner = self.request.user
-        else:
-            self._old_backlog_order_key = self._backlog_order_key(self.get_object())
-            self._old_kanban_order_key = self._kanban_order_key(self.get_object())
-            self._old_sprint_order_key = self._sprint_order_key(self.get_object())
 
         super().pre_save(obj)
+
+    def pre_validate(self):
+        self._old_backlog_order_key = self._backlog_order_key(self.object)
+        self._old_kanban_order_key = self._kanban_order_key(self.object)
+        self._old_sprint_order_key = self._sprint_order_key(self.object)
 
     def _reorder_if_needed(self, obj, old_order_key, order_key, order_attr,
                            project, status=None, milestone=None):
@@ -243,16 +262,19 @@ class UserStoryViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixi
         response = super().create(*args, **kwargs)
 
         # Added comment to the origin (issue)
-        if response.status_code == status.HTTP_201_CREATED and self.object.generated_from_issue:
-            self.object.generated_from_issue.save()
+        if response.status_code == status.HTTP_201_CREATED:
+            for generated_from in ['generated_from_issue', 'generated_from_task']:
+                generator = getattr(self.object, generated_from)
+                if generator:
+                    generator.save()
 
-            comment = _("Generating the user story #{ref} - {subject}")
-            comment = comment.format(ref=self.object.ref, subject=self.object.subject)
-            history = take_snapshot(self.object.generated_from_issue,
-                                    comment=comment,
-                                    user=self.request.user)
+                    comment = _("Generating the user story #{ref} - {subject}")
+                    comment = comment.format(ref=self.object.ref, subject=self.object.subject)
+                    history = take_snapshot(generator,
+                                            comment=comment,
+                                            user=self.request.user)
 
-            self.send_notifications(self.object.generated_from_issue, history)
+                    self.send_notifications(generator, history)
 
         return response
 
@@ -295,19 +317,25 @@ class UserStoryViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixi
         project = get_object_or_404(Project, id=project_id)
 
         filter_backends = self.get_filter_backends()
-        statuses_filter_backends = (f for f in filter_backends if f != base_filters.StatusesFilter)
+        statuses_filter_backends = (f for f in filter_backends if f != base_filters.UserStoryStatusesFilter)
         assigned_to_filter_backends = (f for f in filter_backends if f != base_filters.AssignedToFilter)
+        assigned_users_filter_backends = (f for f in filter_backends if f != base_filters.AssignedUsersFilter)
         owners_filter_backends = (f for f in filter_backends if f != base_filters.OwnersFilter)
         epics_filter_backends = (f for f in filter_backends if f != filters.EpicFilter)
+        roles_filter_backends = (f for f in filter_backends if f != base_filters.RoleFilter)
+        tags_filter_backends = (f for f in filter_backends if f != base_filters.TagsFilter)
 
         queryset = self.get_queryset()
         querysets = {
             "statuses": self.filter_queryset(queryset, filter_backends=statuses_filter_backends),
             "assigned_to": self.filter_queryset(queryset, filter_backends=assigned_to_filter_backends),
+            "assigned_users": self.filter_queryset(queryset, filter_backends=assigned_users_filter_backends),
             "owners": self.filter_queryset(queryset, filter_backends=owners_filter_backends),
-            "tags": self.filter_queryset(queryset),
-            "epics": self.filter_queryset(queryset, filter_backends=epics_filter_backends)
+            "tags": self.filter_queryset(queryset, filter_backends=tags_filter_backends),
+            "epics": self.filter_queryset(queryset, filter_backends=epics_filter_backends),
+            "roles": self.filter_queryset(queryset, filter_backends=roles_filter_backends)
         }
+
         return response.Ok(services.get_userstories_filters_data(project, querysets))
 
     @list_route(methods=["GET"])

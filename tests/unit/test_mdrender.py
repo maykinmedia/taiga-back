@@ -20,14 +20,20 @@
 from unittest.mock import patch, MagicMock
 
 from taiga.mdrender.extensions import emojify
+from taiga.mdrender.extensions import refresh_attachment
 from taiga.mdrender.service import render, cache_by_sha, get_diff_of_htmls, render_and_extract
+from taiga.projects.attachments.services import REFRESH_PARAM
 
-from datetime import datetime
-import pytz
+import time
 
 dummy_project = MagicMock()
 dummy_project.id = 1
 dummy_project.slug = "test"
+
+
+dummy_object = MagicMock()
+del dummy_object.slug
+dummy_object.project = dummy_project
 
 
 def test_proccessor_valid_emoji():
@@ -48,7 +54,10 @@ def test_mentions_valid_username():
 
         result = render(dummy_project, "text @hermione text")
 
-        get_user_model_mock.return_value.objects.get.assert_called_with(username="hermione")
+        get_user_model_mock.return_value.objects.get.assert_called_with(
+            memberships__project_id=1,
+            username="hermione",
+        )
         assert result == ('<p>text <a class="mention" href="http://localhost:9001/profile/hermione" '
                           'title="Hermione Granger">@hermione</a> text</p>')
 
@@ -61,7 +70,10 @@ def test_mentions_valid_username_with_points():
 
         result = render(dummy_project, "text @luna.lovegood text")
 
-        get_user_model_mock.return_value.objects.get.assert_called_with(username="luna.lovegood")
+        get_user_model_mock.return_value.objects.get.assert_called_with(
+            memberships__project_id=1,
+            username="luna.lovegood",
+        )
         assert result == ('<p>text <a class="mention" href="http://localhost:9001/profile/luna.lovegood" '
                           'title="Luna Lovegood">@luna.lovegood</a> text</p>')
 
@@ -74,7 +86,10 @@ def test_mentions_valid_username_with_dash():
 
         result = render(dummy_project, "text @super-ginny text")
 
-        get_user_model_mock.return_value.objects.get.assert_called_with(username="super-ginny")
+        get_user_model_mock.return_value.objects.get.assert_called_with(
+            memberships__project_id=1,
+            username="super-ginny",
+        )
         assert result == ('<p>text <a class="mention" href="http://localhost:9001/profile/super-ginny" '
                           'title="Ginny Weasley">@super-ginny</a> text</p>')
 
@@ -85,7 +100,7 @@ def test_proccessor_valid_us_reference():
         instance.content_type.model = "userstory"
         instance.content_object.subject = "test"
         result = render(dummy_project, "**#1**")
-        expected_result = '<p><strong><a class="reference user-story" href="http://localhost:9001/project/test/us/1" title="#1 test">#1</a></strong></p>'
+        expected_result = '<p><strong><a class="reference user-story" href="http://localhost:9001/project/test/us/1" title="#1 test">&num;1</a></strong></p>'
         assert result == expected_result
 
 
@@ -95,7 +110,7 @@ def test_proccessor_valid_issue_reference():
         instance.content_type.model = "issue"
         instance.content_object.subject = "test"
         result = render(dummy_project, "**#2**")
-        expected_result = '<p><strong><a class="reference issue" href="http://localhost:9001/project/test/issue/2" title="#2 test">#2</a></strong></p>'
+        expected_result = '<p><strong><a class="reference issue" href="http://localhost:9001/project/test/issue/2" title="#2 test">&num;2</a></strong></p>'
         assert result == expected_result
 
 
@@ -105,7 +120,7 @@ def test_proccessor_valid_task_reference():
         instance.content_type.model = "task"
         instance.content_object.subject = "test"
         result = render(dummy_project, "**#3**")
-        expected_result = '<p><strong><a class="reference task" href="http://localhost:9001/project/test/task/3" title="#3 test">#3</a></strong></p>'
+        expected_result = '<p><strong><a class="reference task" href="http://localhost:9001/project/test/task/3" title="#3 test">&num;3</a></strong></p>'
         assert result == expected_result
 
 
@@ -174,6 +189,16 @@ def test_render_wikilink_relative_to_absolute():
     assert render(dummy_project, "[test project](/project/test/)") == expected_result
 
 
+def test_render_wikilink_obj_without_slug_absolute():
+    expected_result = "<p><a href=\"http://localhost:9001/project/test/\">test project</a></p>"
+    assert render(dummy_object, "[test project](/project/test/)") == expected_result
+
+
+def test_render_wikilink_obj_without_slug_relative():
+    expected_result = "<p><a class=\"reference wiki\" href=\"http://localhost:9001/project/test/wiki/wiki_page\">test project</a></p>"
+    assert render(dummy_object, "[test project](wiki_page)") == expected_result
+
+
 def test_render_reference_links():
     expected_result = "<p>An <a href=\"http://example.com/\" target=\"_blank\" title=\"Title\">example</a> of reference link</p>"
     source = "An [example][id] of reference link\n  [id]: http://example.com/  \"Title\""
@@ -207,13 +232,13 @@ def test_render_relative_image():
 
 
 def test_render_triple_quote_code():
-    expected_result = '<div class="codehilite"><pre><span></span><span class="k">print</span><span class="p">(</span><span class="s2">"test"</span><span class="p">)</span>\n</pre></div>'
+    expected_result = '<div class="codehilite"><pre><span></span><span class="k">print</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>\n</pre></div>'
 
     assert render(dummy_project, "```python\nprint(\"test\")\n```") == expected_result
 
 
 def test_render_triple_quote_and_lang_code():
-    expected_result = '<div class="codehilite"><pre><span></span><span class="k">print</span><span class="p">(</span><span class="s2">"test"</span><span class="p">)</span>\n</pre></div>'
+    expected_result = '<div class="codehilite"><pre><span></span><span class="k">print</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>\n</pre></div>'
 
     assert render(dummy_project, "```python\nprint(\"test\")\n```") == expected_result
 
@@ -221,13 +246,19 @@ def test_render_triple_quote_and_lang_code():
 def test_cache_by_sha():
     @cache_by_sha
     def test_cache(project, text):
-        return datetime.now(pytz.utc)
+        # Dummy function: ensure every invocation returns a different value
+        return time.time()
 
-    result1 = test_cache(dummy_project, "test")
-    result2 = test_cache(dummy_project, "test2")
-    assert result1 != result2
-    result3 = test_cache(dummy_project, "test")
-    assert result1 == result3
+    padding = "X" * 40  # Needed as cache is disabled for text under 40 chars
+
+    result_a_1 = test_cache(dummy_project, "A" + padding)
+    result_b_1 = test_cache(dummy_project, "B")
+    result_a_2 = test_cache(dummy_project, "A" + padding)
+    result_b_2 = test_cache(dummy_project, "B")
+
+    assert result_a_1 != result_b_1  # Evidently
+    assert result_b_1 != result_b_2  # No cached!
+    assert result_a_1 == result_a_2  # Cached!
 
 
 def test_get_diff_of_htmls_insertions():
@@ -252,3 +283,43 @@ def test_render_and_extract_references():
         instance.content_object.subject = "test"
         (_, extracted) = render_and_extract(dummy_project, "**#1**")
         assert extracted['references'] == [instance.content_object]
+
+
+def test_render_attachment_image(settings):
+    settings.MEDIA_URL = "http://media.example.com/"
+    attachment_url = "{}path/to/test.png#{}=us:42".format(settings.MEDIA_URL, REFRESH_PARAM)
+    sentinel_url = "http://__sentinel__/"
+
+    md = "![Test]({})".format(attachment_url)
+    expected_result = "<p><img alt=\"Test\" src=\"{}#{}={}\"></p>".format(sentinel_url, REFRESH_PARAM, "us:42")
+
+    with patch("taiga.mdrender.extensions.refresh_attachment.get_attachment_by_id") as mock:
+        attachment = mock.return_value
+        attachment.id = 42
+        attachment.attached_file.url = sentinel_url
+
+        result = render(dummy_project, md)
+
+    assert result == expected_result
+    assert mock.called is True
+    mock.assert_called_with(dummy_project.id, 42)
+
+
+def test_render_attachment_file(settings):
+    settings.MEDIA_URL = "http://media.example.com/"
+    attachment_url = "{}path/to/file.pdf#{}=us:42".format(settings.MEDIA_URL, REFRESH_PARAM)
+    sentinel_url = "http://__sentinel__/"
+
+    md = "[Test]({})".format(attachment_url)
+    expected_result = "<p><a href=\"{}#{}={}\" target=\"_blank\">Test</a></p>".format(sentinel_url, REFRESH_PARAM, "us:42")
+
+    with patch("taiga.mdrender.extensions.refresh_attachment.get_attachment_by_id") as mock:
+        attachment = mock.return_value
+        attachment.id = 42
+        attachment.attached_file.url = sentinel_url
+
+        result = render(dummy_project, md)
+
+    assert result == expected_result
+    assert mock.called is True
+    mock.assert_called_with(dummy_project.id, 42)

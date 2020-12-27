@@ -19,6 +19,8 @@
 from taiga.users.models import User
 from taiga.projects.models import Membership
 
+from taiga.permissions.choices import ANON_PERMISSIONS
+
 
 def resolve_users_bindings(users_bindings):
     new_users_bindings = {}
@@ -39,6 +41,7 @@ def resolve_users_bindings(users_bindings):
             new_users_bindings[user_key] = User.objects.get(id=value)
     return new_users_bindings
 
+
 def create_memberships(users_bindings, project, creator, role_name):
     for user in users_bindings.values():
         if Membership.objects.filter(project=project, user=user).count() > 0:
@@ -50,3 +53,16 @@ def create_memberships(users_bindings, project, creator, role_name):
             is_admin=False,
             invited_by=creator,
         )
+
+
+def set_base_permissions_for_project(project):
+    if project.is_private:
+        return
+
+    anon_permissions = list(
+        map(lambda perm: perm[0], ANON_PERMISSIONS))
+    project.anon_permissions = list(
+        set((project.anon_permissions or []) + anon_permissions))
+    project.public_permissions = list(
+        set((project.public_permissions or []) + anon_permissions))
+    project.save()

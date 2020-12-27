@@ -28,7 +28,7 @@ from taiga.front.templatetags.functions import resolve
 
 class TargetBlankLinkExtension(markdown.Extension):
     """An extension that add target="_blank" to all external links."""
-    def extendMarkdown(self, md, md_globals):
+    def extendMarkdown(self, md):
         md.treeprocessors.add("target_blank_links",
                               TargetBlankLinksTreeprocessor(md),
                               "<prettify")
@@ -37,7 +37,7 @@ class TargetBlankLinkExtension(markdown.Extension):
 class TargetBlankLinksTreeprocessor(Treeprocessor):
     def run(self, root):
         home_url = resolve("home")
-        links = root.getiterator("a")
+        links = root.iter("a")
         for a in links:
             href = a.get("href", "")
             url = a.get("href", "")

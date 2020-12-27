@@ -15,11 +15,15 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from urllib.parse import urlparse
 
+from django.core.files.storage import default_storage
+from django.conf import settings
 from django.contrib.auth import get_user_model
 
 from taiga.base.api import serializers
 from taiga.base.fields import Field, MethodField
+from taiga.base.utils.thumbnails import get_thumbnail_url
 from taiga.users.services import get_user_photo_url, get_user_big_photo_url
 from taiga.users.gravatar import get_user_gravatar_id
 
@@ -65,4 +69,28 @@ class TimelineSerializer(serializers.LightSerializer):
                 "date_joined": user.date_joined
             }
 
+        if "values_diff" in obj.data and "attachments" in obj.data["values_diff"]:
+            [[self.parse_url(item) for item in value] for key, value in
+             obj.data["values_diff"]["attachments"].items() if value]
+
         return obj.data
+
+    def parse_url(self, item):
+        if 'attached_file' in item:
+            attached_file = item['attached_file']
+        else:
+            # This is the case for old timeline entries
+            file_path = urlparse(item['url']).path
+            index = file_path.find('/attachments')
+            attached_file = file_path[index+1:]
+
+        item['url'] = default_storage.url(attached_file)
+
+        if 'thumbnail_file' in item:
+            thumb_file = item['thumbnail_file']
+            thumb_url = default_storage.url(thumb_file) if thumb_file else None
+        else:
+            thumb_url = get_thumbnail_url(attached_file,
+                                          settings.THN_ATTACHMENT_TIMELINE)
+
+        item['thumb_url'] = thumb_url

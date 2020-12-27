@@ -62,15 +62,33 @@ class UserStoryStatusExportValidator(validators.ModelValidator):
         exclude = ('id', 'project')
 
 
+class UserStoryDueDateExportValidator(validators.ModelValidator):
+    class Meta:
+        model = projects_models.UserStoryDueDate
+        exclude = ('id', 'project')
+
+
 class TaskStatusExportValidator(validators.ModelValidator):
     class Meta:
         model = projects_models.TaskStatus
         exclude = ('id', 'project')
 
 
+class TaskDueDateExportValidator(validators.ModelValidator):
+    class Meta:
+        model = projects_models.TaskDueDate
+        exclude = ('id', 'project')
+
+
 class IssueStatusExportValidator(validators.ModelValidator):
     class Meta:
         model = projects_models.IssueStatus
+        exclude = ('id', 'project')
+
+
+class IssueDueDateExportValidator(validators.ModelValidator):
+    class Meta:
+        model = projects_models.IssueDueDate
         exclude = ('id', 'project')
 
 
@@ -162,7 +180,7 @@ class BaseCustomAttributesValuesExportValidator(validators.ModelValidator):
         qs = self._custom_attribute_model.objects.filter(project=project_id,
                                                          id__in=values_ids)
         if qs.count() != len(values_ids):
-            raise ValidationError(_("It contain invalid custom fields."))
+            raise ValidationError(_("It contains invalid custom fields."))
 
         return attrs
 
@@ -258,6 +276,7 @@ class TaskExportValidator(WatcheableObjectModelValidatorMixin):
     milestone = ProjectRelatedField(slug_field="name", required=False)
     assigned_to = UserRelatedField(required=False)
     modified_date = serializers.DateTimeField(required=False)
+    due_date = serializers.DateTimeField(required=False)
 
     class Meta:
         model = tasks_models.Task
@@ -272,9 +291,21 @@ class TaskExportValidator(WatcheableObjectModelValidatorMixin):
 class EpicRelatedUserStoryExportValidator(validators.ModelValidator):
     user_story = ProjectRelatedField(slug_field="ref")
     order = serializers.IntegerField()
+    source_project_slug = serializers.CharField(required=False)
+
+    def validate_source_project_slug(self, attrs, source):
+        if source in attrs and attrs[source] is not None and attrs[source] != "":
+            msg = _("An Epic has a related story from an external project (%(project)s) and cannot be imported") % {"project": attrs[source]}
+            raise ValidationError(msg)
+
+        attrs.pop(source, None)
+        return attrs
 
     class Meta:
         model = epics_models.RelatedUserStory
+        extra_kwargs = {
+            'source_project_slug': {'write_only': True},
+        }
         exclude = ('id', 'epic')
 
 
@@ -301,14 +332,17 @@ class UserStoryExportValidator(WatcheableObjectModelValidatorMixin):
     role_points = RolePointsExportValidator(many=True, required=False)
     owner = UserRelatedField(required=False)
     assigned_to = UserRelatedField(required=False)
+    assigned_users = UserRelatedField(many=True, required=False)
     status = ProjectRelatedField(slug_field="name")
     milestone = ProjectRelatedField(slug_field="name", required=False)
     modified_date = serializers.DateTimeField(required=False)
     generated_from_issue = ProjectRelatedField(slug_field="ref", required=False)
+    generated_from_task = ProjectRelatedField(slug_field="ref", required=False)
+    due_date = serializers.DateTimeField(required=False)
 
     class Meta:
         model = userstories_models.UserStory
-        exclude = ('id', 'project', 'points', 'tasks')
+        exclude = ('id', 'project', 'points', 'tasks', 'from_task_ref')
 
     def custom_attributes_queryset(self, project):
         if project.id not in _custom_userstories_attributes_cache:
@@ -327,6 +361,7 @@ class IssueExportValidator(WatcheableObjectModelValidatorMixin):
     type = ProjectRelatedField(slug_field="name")
     milestone = ProjectRelatedField(slug_field="name", required=False)
     modified_date = serializers.DateTimeField(required=False)
+    due_date = serializers.DateTimeField(required=False)
 
     class Meta:
         model = issues_models.Issue

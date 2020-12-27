@@ -19,7 +19,7 @@
 
 import pytest
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.core import mail
 
 from .. import factories
@@ -33,6 +33,7 @@ def register_form():
             "password": "password",
             "full_name": "fname",
             "email": "user@email.com",
+            "accepted_terms": True,
             "type": "public"}
 
 
@@ -87,6 +88,7 @@ def test_response_200_in_public_registration(client, settings):
         "full_name": "martin seamus mcfly",
         "email": "mmcfly@bttf.com",
         "password": "password",
+        "accepted_terms": True,
     }
 
     response = client.post(reverse("auth-register"), form)
@@ -129,6 +131,7 @@ def test_auth_uppercase_ignore(client, settings):
                      "password": "password",
                      "full_name": "fname",
                      "email": "User@email.com",
+                     "accepted_terms": True,
                      "type": "public"}
     response = client.post(reverse("auth-register"), register_form)
 
@@ -153,6 +156,7 @@ def test_auth_uppercase_ignore(client, settings):
                      "password": "password",
                      "full_name": "fname",
                      "email": "user@email.com",
+                     "accepted_terms": True,
                      "type": "public"}
     response = client.post(reverse("auth-register"), register_form)
 
@@ -194,6 +198,7 @@ def test_login_fail_throttling(client, settings):
                      "password": "valid_password",
                      "full_name": "fullname",
                      "email": "valid_username_login_fail@email.com",
+                     "accepted_terms": True,
                      "type": "public"}
     response = client.post(reverse("auth-register"), register_form)
 
@@ -235,6 +240,7 @@ def test_register_success_throttling(client, settings):
                      "password": "valid_password",
                      "full_name": "fullname",
                      "email": "",
+                     "accepted_terms": True,
                      "type": "public"}
     response = client.post(reverse("auth-register"), register_form)
     assert response.status_code == 400
@@ -243,6 +249,7 @@ def test_register_success_throttling(client, settings):
                      "password": "valid_password",
                      "full_name": "fullname",
                      "email": "valid_username_register_success@email.com",
+                     "accepted_terms": True,
                      "type": "public"}
     response = client.post(reverse("auth-register"), register_form)
     assert response.status_code == 201
@@ -251,6 +258,7 @@ def test_register_success_throttling(client, settings):
                      "password": "valid_password2",
                      "full_name": "fullname",
                      "email": "valid_username_register_success2@email.com",
+                     "accepted_terms": True,
                      "type": "public"}
     response = client.post(reverse("auth-register"), register_form)
     assert response.status_code == 429
@@ -259,8 +267,40 @@ def test_register_success_throttling(client, settings):
                      "password": "valid_password2",
                      "full_name": "fullname",
                      "email": "",
+                     "accepted_terms": True,
                      "type": "public"}
     response = client.post(reverse("auth-register"), register_form)
     assert response.status_code == 429
 
     settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["register-success"] = None
+
+
+INVALID_NAMES = [
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod",
+    "an <script>evil()</script> example",
+    "http://testdomain.com",
+    "https://testdomain.com",
+    "Visit http://testdomain.com",
+]
+
+@pytest.mark.parametrize("full_name", INVALID_NAMES)
+def test_register_sanitize_invalid_user_full_name(client, settings, full_name, register_form):
+    settings.PUBLIC_REGISTER_ENABLED = True
+    register_form["full_name"] = full_name
+    response = client.post(reverse("auth-register"), register_form)
+    assert response.status_code == 400
+
+VALID_NAMES = [
+    "martin seamus mcfly"
+]
+
+@pytest.mark.parametrize("full_name", VALID_NAMES)
+def test_register_sanitize_valid_user_full_name(client, settings, full_name, register_form):
+    settings.PUBLIC_REGISTER_ENABLED = True
+    register_form["full_name"] = full_name
+    response = client.post(reverse("auth-register"), register_form)
+    assert response.status_code == 201
+
+
+
+

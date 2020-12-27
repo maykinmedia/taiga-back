@@ -118,7 +118,7 @@ class UserAdmin(DjangoUserAdmin):
         (None, {"fields": ("username", "password")}),
         (_("Personal info"), {"fields": ("full_name", "email", "bio", "photo")}),
         (_("Extra info"), {"fields": ("color", "lang", "timezone", "token", "colorize_tags",
-                                      "email_token", "new_email")}),
+                                      "email_token", "new_email", "verified_email", "accepted_terms", "read_new_terms")}),
         (_("Permissions"), {"fields": ("is_active", "is_superuser")}),
         (_("Restrictions"), {"fields": (("max_private_projects", "max_memberships_private_projects"),
                                         ("max_public_projects", "max_memberships_public_projects"))}),
@@ -127,7 +127,7 @@ class UserAdmin(DjangoUserAdmin):
     form = UserChangeForm
     add_form = UserCreationForm
     list_display = ("username", "email", "full_name")
-    list_filter = ("is_superuser", "is_active")
+    list_filter = ("is_superuser", "is_active", "verified_email")
     search_fields = ("username", "full_name", "email")
     ordering = ("username",)
     filter_horizontal = ()

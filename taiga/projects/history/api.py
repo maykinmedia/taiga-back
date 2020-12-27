@@ -24,6 +24,8 @@ from taiga.base import response
 from taiga.base.decorators import detail_route
 from taiga.base.api import ReadOnlyListViewSet
 from taiga.mdrender.service import render as mdrender
+from taiga.projects.notifications import services as notifications_services
+from taiga.projects.notifications.apps import signal_mentions
 
 from . import permissions
 from . import serializers
@@ -56,6 +58,11 @@ class HistoryViewSet(ReadOnlyListViewSet):
             serializer = self.get_serializer(queryset, many=True)
 
         return response.Ok(serializer.data)
+
+    def _get_new_mentions(self, obj: object, old_comment: str, new_comment: str):
+        old_mentions = notifications_services.get_mentions(obj.project, old_comment)
+        submitted_mentions = notifications_services.get_mentions(obj, new_comment)
+        return list(set(submitted_mentions) - set(old_mentions))
 
     @detail_route(methods=['get'])
     def comment_versions(self, request, pk):
@@ -106,11 +113,20 @@ class HistoryViewSet(ReadOnlyListViewSet):
             }
         })
 
+        new_mentions = self._get_new_mentions(obj, history_entry.comment, comment)
+
         history_entry.edit_comment_date = timezone.now()
         history_entry.comment = comment
         history_entry.comment_html = mdrender(obj.project, comment)
         history_entry.comment_versions = comment_versions
         history_entry.save()
+
+        if new_mentions:
+            signal_mentions.send(sender=self.__class__,
+                                 user=self.request.user,
+                                 obj=obj,
+                                 mentions=new_mentions)
+
         return response.Ok()
 
     @detail_route(methods=['post'])
@@ -164,7 +180,22 @@ class HistoryViewSet(ReadOnlyListViewSet):
         obj = self.get_object()
         self.check_permissions(request, "retrieve", obj)
         qs = services.get_history_queryset_by_model_instance(obj)
+
+        history_type = self.request.GET.get('type')
+        if history_type == 'activity':
+            qs = qs.filter(diff__isnull=False, comment__exact='').exclude(diff__exact='')
+
+        if history_type == 'comment':
+            qs = qs.exclude(comment__exact='')
+
+        qs = qs.order_by("-created_at")
         qs = services.prefetch_owners_in_history_queryset(qs)
+
+        if self.request.GET.get(self.page_kwarg):
+            page = self.paginate_queryset(qs)
+            serializer = self.get_pagination_serializer(page)
+            return response.Ok(serializer.data)
+
         return self.response_for_queryset(qs)
 
 

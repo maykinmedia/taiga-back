@@ -1,4 +1,497 @@
-# Changelog #
+# Changelog
+
+## Unreleased
+
+## 5.5.9 (2020-12-21)
+
+### Fix
+
+- Fix attachment refresh feature.
+
+- Fix welcome email template layout.
+
+### Misc
+
+- Updated requirements. **Please note that Python 3.5 is not supported**.
+
+- Several minor changes.
+
+### i18n
+
+- Add Arabic.
+
+- Update Russian.
+
+## 5.5.7 (2020-11-11)
+
+### Misc
+
+- Upgrade requirements.
+
+- Fix deprecation warnings.
+
+## 5.5.5 (2020-09-16)
+
+### Misc
+
+- Improve verify email feature for invited users.
+
+### i18n
+
+- Update catalog.
+
+- Update fa.
+
+## 5.5.4 (2020-09-08)
+
+### Misc
+
+- Upgrade requirements.
+
+### i18n
+
+- Update French translation.
+
+## 5.5.3 (2020-09-02)
+
+### Misc
+
+- Parametrize mdrender cache options.
+
+- Minor bug fix.
+
+## 5.5.2 (2020-08-26)
+
+### Misc
+
+- Tweaks mdrender cache.
+
+## 5.5.1 (2020-08-23)
+
+### Features
+
+- Prevent member creation to users with unverified email address.
+
+## 5.5.0 (2020-08-19)
+
+### Features
+
+- Verify user email.
+
+- Task promotion creates user story and deletes original task.
+
+### Misc
+
+- Upgraded Django version to 2.2. This is a BREAKING CHANGE. Contributed
+  modules should be upgraded.
+
+- Several minor bugfixes.
+
+## 5.0.15 (2020-06-17)
+
+### Misc
+
+- Fixed bug old dump format project import.
+
+## 5.0.14 (2020-06-16)
+
+### Misc
+
+- Fixed several minor bugs.
+
+## 5.0.13 (2020-06-08)
+
+### Features
+
+- Resolved Django deprecation warnings to prepare for an upgrade.
+
+- Added option to disallow anonymous access to user profiles.
+
+### Misc
+
+- Updated requirements.
+
+- Use pip-tools to manage dependencies.
+
+### i18n
+
+- Updated translations (lv).
+
+## 5.0.12 (2020-05-12)
+
+### Security
+
+- Avoid change in membership attribute. We encourage all users of Taiga
+  to upgrade as soon as possible.
+
+## 5.0.11 (2020-05-04)
+
+### Misc
+
+- Fixed several minor bugs.
+
+- Updated requirements.
+
+### i18n
+
+- Updated translations (es, lv, ru, tr, uk).
+
+## 5.0.9 (2020-03-11)
+
+### Feature
+
+- Implemented new simplified email messages.
+
+### Misc
+
+- Fixed several minor bugs.
+
+- Updated requirements.
+
+### i18n
+
+- Updated lots of strings and updated their translations.
+
+## 5.0.8 (2020-02-17)
+
+### i18n
+
+- Update Basque translation and others.
+
+### Misc
+
+- Several minor bugfixes.
+
+## 5.0.7 (2020-02-06)
+
+### Feature
+
+- Add reduce notifications configuration option.
+
+- Sanitize full name input.
+
+### i18n
+
+- Add Latvian translation.
+
+### Misc
+
+- Several minor bugfixes.
+
+## 5.0.6 (2020-01-15)
+
+### Misc
+
+- Minor fix on contact project team feature.
+
+## 5.0.5 (2020-01-08)
+
+### Feature
+
+- Promote task and issues to user story with watchers, attachments and comments.
+
+### Misc
+
+- Several minor bugfixes and translation updates.
+
+## 5.0.0 (2019-11-13)
+
+- Refresh attachment URL on markdown fields to support protected backend.
+
+- Update requirements.
+
+- Update translations: Persian (Iran), French, Portuguese (Brazil).
+
+## 4.2.14 (2019-10-01)
+
+- Update requirements to support python3.7. This is a potentially BREAKING
+  CHANGE. Several libraries were updated to minor and patch releases.
+  Contributed modules should be tested thoroughly.
+
+- Minor bug fixes.
+
+## 4.2.12 (2019-08-06)
+
+### Misc
+
+- Upgrade requirements
+- Events refactoring
+
+## 4.2.11 (2019-07-24)
+
+### Misc
+
+- Asana bug fix.
+
+## 4.2.10 (2019-07-11)
+
+### Misc
+
+- Remove role points project signal from patch US's.
+- Improve US's statuses filter by project.
+
+
+## 4.2.7 (2019-06-24)
+
+### Misc
+
+- Add default settings slug configuration.
+- Minor bug fixes.
+
+## 4.2.6 (2019-06-12)
+
+### Misc
+
+- Recreate timeline indexes.
+- Minor bug fixes.
+
+
+## 4.2.4 / 4.2.5 (2019-05-09)
+
+### Misc
+
+- Fix epics excluded filter (https://tree.taiga.io/project/taiga/issue/5727)
+- Avoid saving non integer user id's in history diffs
+- Upgrade requests dependence
+
+
+## 4.2.3 (2019-04-16)
+
+### Features:
+
+- Change tag filter behavour to 'or' operator
+
+### Misc
+
+- Change milestone query
+- Avoid getting non image thumbnails
+- Remove unnecesary queries on saving items
+- Update messages catalog
+- Minor bug fixes.
+
+## 4.2.2 (2019-03-21)
+
+### Features:
+
+- Fix milestone US serializer
+
+## 4.2.1 (2019-03-20)
+
+### Features:
+
+- Add dashboard filter for user stories updating queryset and serializer
+- Change milestone user story serializer
+- Remove additional order by in timeline queryset
+- Add user project slight queryset and serializer
+- Filter history comments queryset
+
+### Misc
+
+- Minor bug fixes.
+
+## 4.2.0 (2019-02-28)
+
+### Features:
+
+- Promote Tasks to US
+- Improve queries
+- Activate Hebrew and Basque languages
+
+### Misc
+
+- Minor bug fixes.
+
+## 4.1.0 (2019-02-04)
+
+### Misc
+
+- Fix Close sprints
+
+### Features:
+
+- Negative filters
+- Activate the Ukrainian language
+
+## 4.0.4 (2019-01-15)
+
+### Misc
+
+- Minor bug fixes.
+
+## 4.0.3 (2018-12-11)
+
+### Misc
+
+- Add extra requirements for oauthlib
+
+## 4.0.2 (2018-12-04)
+
+### Misc
+
+- Update messages catalog.
+
+## 4.0.1 (2018-11-28)
+
+### Misc
+
+- Minor bug fix.
+
+## 4.0.0 Larix cajanderi (2018-11-28)
+
+### Features
+
+- Custom home section (https://tree.taiga.io/project/taiga/issue/3059)
+- Custom fields (https://tree.taiga.io/project/taiga/issue/3725):
+    - Dropdown
+    - Checkbox
+    - Number
+- Bulk move unfinished objects in sprint (https://tree.taiga.io/project/taiga/issue/5451)
+- Paginate history activity
+- Improve notifications area (https://tree.taiga.io/project/taiga/issue/2165 and
+  https://tree.taiga.io/project/taiga/issue/3752)
+
+### Misc
+
+- Minor icon changes
+- Lots of small bugfixes
+
+## 3.4.5 (2018-10-15)
+
+### Features
+
+- Prevent local Webhooks
+
+## 3.4.4 (2018-09-19)
+
+### Misc
+
+- Small fixes
+
+## 3.4.3 (2018-09-19)
+
+### Misc
+
+- Refactor attachment url's in timeline
+- Avoid receive feedkback in private projects from non-members
+- Allow delete reports uuid's
+- Small fixes
+
+## 3.4.0 Pinus contorta (2018-08-13)
+
+### Features
+
+- Due dates configuration (https://tree.taiga.io/project/taiga/issue/3070):
+    - Add due dates to admin attributes
+    - Update project templates
+- Issues to Sprints (https://tree.taiga.io/project/taiga/issue/1181):
+    - Add milestone filters
+
+## 3.3.14 (2018-08-06)
+
+### Misc
+
+- Improve US reorder algorithm.
+- Drop python 3.4 and add python 3.6 to travis configuration.
+
+## 3.3.13 (2018-07-05)
+
+### Misc
+
+- Minor bug fixes.
+
+## 3.3.11 (2018-06-27)
+
+### Features
+
+- Add assigned users kanban/taskboard filter.
+- Improve US reorder in kanban.
+- Upgrade psycopg2 library.
+
+## 3.3.8 (2018-06-14)
+
+### Misc
+
+- Minor bug fix.
+
+## 3.3.7 (2018-05-31)
+
+### Misc
+
+- Minor bug fix related with project import.
+
+- Pin requirements to solve incompatible versions detected by pip 10.
+
+## 3.3.4 (2018-05-24)
+
+### Misc
+
+- Add features to fulfill GDPR.
+
+## 3.3.3 (2018-05-10)
+
+### Misc
+
+- Update locales.
+- Minor bug fixes.
+
+## 3.3.1 (2018-04-30)
+
+### Misc
+
+- Minor bug fixes.
+
+## 3.3.1 (2018-04-30)
+
+### Misc
+
+- Minor bug fixes.
+
+## 3.3.0 Picea mariana (2018-04-26)
+
+### Features
+
+- Add "live notifications" to Taiga:
+    - Migration for user configuration.
+- Add due date to US, tasks and issues (https://tree.taiga.io/project/taiga/issue/3070):
+    - Add to csv export.
+    - Add to projects import/export.
+    - Add to webhooks.
+    - Add to django admin.
+- Add multiple assignement only in US (https://tree.taiga.io/project/taiga/issue/1961):
+    - The `assigned_to` field is still active.
+    - Add to csv export.
+    - Add to projects import/export.
+    - Add to webhooks.
+    - Add to django admin.
+- Delete cards in Kanban and sprint Taskboard (https://tree.taiga.io/project/taiga/issue/2683).
+
+## 3.2.3 (2018-04-04)
+
+### Misc
+
+- Fix milestone burndown graph with empty US.
+- Upgrade markdown library to solve bug.
+- Update locales.
+
+## 3.2.2 (2018-03-15)
+
+### Misc
+
+- Minor bug fixes.
+
+
+## 3.2.0 Betula nana (2018-03-07)
+
+### Features
+- Add role filtering in US.
+
+
+## 3.1.3 (2018-02-28)
+
+### Features
+- Increase token entropy.
+- Squash field changes on notification emails
+- Minor bug fixes.
 
 
 ## 3.1.0 Perovskia Atriplicifolia (2017-03-10)

@@ -18,10 +18,13 @@
 
 import csv
 import io
+import logging
+
 from collections import OrderedDict
 from operator import itemgetter
 from contextlib import closing
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import connection
 from django.utils.translation import ugettext as _
 
@@ -35,6 +38,9 @@ from taiga.projects.votes.utils import attach_total_voters_to_queryset
 from taiga.projects.notifications.utils import attach_watchers_to_queryset
 
 from . import models
+
+
+logger = logging.getLogger(__name__)
 
 
 #####################################################
@@ -112,29 +118,70 @@ def snapshot_tasks_in_bulk(bulk_data, user):
             pass
 
 
+def update_tasks_milestone_in_bulk(bulk_data: list, milestone: object):
+    """
+    Update the milestone and the milestone order of some tasks adding
+    the extra orders needed to keep consistency.
+    `bulk_data` should be a list of dicts with the following format:
+    [{'task_id': <value>, 'order': <value>}, ...]
+    """
+    tasks = milestone.tasks.all()
+    task_orders = {task.id: getattr(task, "taskboard_order") for task in tasks}
+    new_task_orders = {}
+    for e in bulk_data:
+        new_task_orders[e["task_id"]] = e["order"]
+        # The base orders where we apply the new orders must containg all
+        # the values
+        task_orders[e["task_id"]] = e["order"]
+
+    apply_order_updates(task_orders, new_task_orders)
+
+    task_milestones = {e["task_id"]: milestone.id for e in bulk_data}
+    task_ids = task_milestones.keys()
+
+    events.emit_event_for_ids(ids=task_ids,
+                              content_type="tasks.task",
+                              projectid=milestone.project.pk)
+
+    db.update_attr_in_bulk_for_ids(task_milestones, "milestone_id",
+                                   model=models.Task)
+
+    db.update_attr_in_bulk_for_ids(task_orders, "taskboard_order", models.Task)
+
+    return task_milestones
+
+
 #####################################################
 # CSV
 #####################################################
 
 def tasks_to_csv(project, queryset):
     csv_data = io.StringIO()
-    fieldnames = ["ref", "subject", "description", "user_story", "sprint", "sprint_estimated_start",
-                  "sprint_estimated_finish", "owner", "owner_full_name", "assigned_to",
-                  "assigned_to_full_name", "status", "is_iocaine", "is_closed", "us_order",
-                  "taskboard_order", "attachments", "external_reference", "tags", "watchers", "voters",
-                  "created_date", "modified_date", "finished_date"]
+    fieldnames = ["id", "ref", "subject", "description", "user_story", "sprint_id",
+                  "sprint", "sprint_estimated_start", "sprint_estimated_finish",
+                  "owner", "owner_full_name",
+                  "assigned_to",
+                  "assigned_to_full_name", "status", "is_iocaine", "is_closed",
+                  "us_order",
+                  "taskboard_order", "attachments", "external_reference",
+                  "tags", "watchers",
+                  "voters", "created_date", "modified_date", "finished_date",
+                  "due_date",
+                  "due_date_reason"]
 
     custom_attrs = project.taskcustomattributes.all()
     for custom_attr in custom_attrs:
         fieldnames.append(custom_attr.name)
 
     queryset = queryset.prefetch_related("attachments",
+                                         "generated_user_stories",
                                          "custom_attributes_values")
     queryset = queryset.select_related("milestone",
                                        "owner",
                                        "assigned_to",
                                        "status",
-                                       "project")
+                                       "project",
+                                       "user_story")
 
     queryset = attach_total_voters_to_queryset(queryset)
     queryset = attach_watchers_to_queryset(queryset)
@@ -143,10 +190,12 @@ def tasks_to_csv(project, queryset):
     writer.writeheader()
     for task in queryset:
         task_data = {
+            "id": task.id,
             "ref": task.ref,
             "subject": task.subject,
             "description": task.description,
             "user_story": task.user_story.ref if task.user_story else None,
+            "sprint_id": task.milestone.id if task.milestone else None,
             "sprint": task.milestone.name if task.milestone else None,
             "sprint_estimated_start": task.milestone.estimated_start if task.milestone else None,
             "sprint_estimated_finish": task.milestone.estimated_finish if task.milestone else None,
@@ -167,11 +216,14 @@ def tasks_to_csv(project, queryset):
             "created_date": task.created_date,
             "modified_date": task.modified_date,
             "finished_date": task.finished_date,
+            "due_date": task.due_date,
+            "due_date_reason": task.due_date_reason,
         }
         for custom_attr in custom_attrs:
+            if not hasattr(task, "custom_attributes_values"):
+                continue
             value = task.custom_attributes_values.attributes_values.get(str(custom_attr.id), None)
             task_data[custom_attr.name] = value
-
         writer.writerow(task_data)
 
     return csv_data
@@ -279,6 +331,58 @@ def _get_tasks_assigned_to(project, queryset):
     return sorted(result, key=itemgetter("full_name"))
 
 
+def _get_tasks_roles(project, queryset):
+    compiler = connection.ops.compiler(queryset.query.compiler)(queryset.query, connection, None)
+    queryset_where_tuple = queryset.query.where.as_sql(compiler, connection)
+    where = queryset_where_tuple[0]
+    where_params = queryset_where_tuple[1]
+
+    extra_sql = """
+     WITH "task_counters" AS (
+         SELECT DISTINCT "tasks_task"."status_id" "status_id",
+                         "tasks_task"."id" "us_id",
+                         "projects_membership"."role_id" "role_id"
+                    FROM "tasks_task"
+              INNER JOIN "projects_project"
+                      ON ("tasks_task"."project_id" = "projects_project"."id")
+         LEFT OUTER JOIN "projects_membership"
+                      ON "projects_membership"."user_id" = "tasks_task"."assigned_to_id"
+                   WHERE {where}
+            ),
+             "counters" AS (
+                  SELECT "role_id" as "role_id",
+                         COUNT("role_id") "count"
+                    FROM "task_counters"
+                GROUP BY "role_id"
+            )
+
+                 SELECT "users_role"."id",
+                        "users_role"."name",
+                        "users_role"."order",
+                        COALESCE("counters"."count", 0)
+                   FROM "users_role"
+        LEFT OUTER JOIN "counters"
+                     ON "counters"."role_id" = "users_role"."id"
+                  WHERE "users_role"."project_id" = %s
+               ORDER BY "users_role"."order";
+    """.format(where=where)
+
+    with closing(connection.cursor()) as cursor:
+        cursor.execute(extra_sql, where_params + [project.id])
+        rows = cursor.fetchall()
+
+    result = []
+    for id, name, order, count in rows:
+        result.append({
+            "id": id,
+            "name": _(name),
+            "color": None,
+            "order": order,
+            "count": count,
+        })
+    return sorted(result, key=itemgetter("order"))
+
+
 def _get_tasks_owners(project, queryset):
     compiler = connection.ops.compiler(queryset.query.compiler)(queryset.query, connection, None)
     queryset_where_tuple = queryset.query.where.as_sql(compiler, connection)
@@ -384,6 +488,7 @@ def get_tasks_filters_data(project, querysets):
         ("assigned_to", _get_tasks_assigned_to(project, querysets["assigned_to"])),
         ("owners", _get_tasks_owners(project, querysets["owners"])),
         ("tags", _get_tasks_tags(project, querysets["tags"])),
+        ("roles", _get_tasks_roles(project, querysets["roles"])),
     ])
 
     return data

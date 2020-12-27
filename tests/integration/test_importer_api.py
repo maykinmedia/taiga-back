@@ -20,7 +20,7 @@ import pytest
 import base64
 
 from django.apps import apps
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.core.files.base import ContentFile
 
 from taiga.base.utils import json
@@ -70,9 +70,10 @@ def test_valid_project_import_without_extra_data(client):
     response = client.json.post(url, json.dumps(data))
     assert response.status_code == 201, response.data
     must_empty_children = [
-        "issues", "user_stories", "us_statuses", "wiki_pages", "priorities",
-        "severities", "milestones", "points", "issue_types", "task_statuses",
-        "issue_statuses", "wiki_links",
+        "issues", "user_stories", "us_statuses", "us_duedates", "wiki_pages",
+        "priorities", "severities", "milestones", "points", "issue_types",
+        "task_statuses", "task_duedates", "issue_statuses", "issue_duedates",
+        "wiki_links"
     ]
     assert all(map(lambda x: len(response.data[x]) == 0, must_empty_children))
     assert response.data["owner"] == user.email
@@ -218,6 +219,9 @@ def test_valid_project_import_with_extra_data(client):
         "us_statuses": [{
             "name": "Test"
         }],
+        "us_duedates": [{
+            "name": "Test"
+        }],
         "severities": [{
             "name": "Test"
         }],
@@ -233,7 +237,13 @@ def test_valid_project_import_with_extra_data(client):
         "task_statuses": [{
             "name": "Test"
         }],
+        "task_duedates": [{
+            "name": "Test"
+        }],
         "issue_statuses": [{
+            "name": "Test"
+        }],
+        "issue_duedates": [{
             "name": "Test"
         }],
     }
@@ -246,8 +256,9 @@ def test_valid_project_import_with_extra_data(client):
     ]
 
     must_one_instance_children = [
-        "roles", "us_statuses", "severities", "priorities", "points",
-        "issue_types", "task_statuses", "issue_statuses", "memberships",
+        "roles", "us_statuses", "us_duedates", "severities", "priorities",
+        "points", "issue_types", "task_statuses", "task_duedates",
+        "issue_statuses", "issue_duedates", "memberships"
     ]
 
     assert all(map(lambda x: len(response.data[x]) == 0, must_empty_children))
@@ -271,6 +282,7 @@ def test_invalid_project_import_without_roles(client):
     assert len(response.data) == 2
     assert Project.objects.filter(slug="imported-project").count() == 0
 
+
 def test_invalid_project_import_with_extra_data(client):
     user = f.UserFactory.create()
     client.login(user)
@@ -284,17 +296,20 @@ def test_invalid_project_import_with_extra_data(client):
             "name": "Test"
         }],
         "us_statuses": [{}],
+        "us_duedates": [{}],
         "severities": [{}],
         "priorities": [{}],
         "points": [{}],
         "issue_types": [{}],
         "task_statuses": [{}],
+        "task_duedates": [{}],
+        "issue_duedates": [{}],
         "issue_statuses": [{}],
     }
 
     response = client.json.post(url, json.dumps(data))
     assert response.status_code == 400
-    assert len(response.data) == 7
+    assert len(response.data) == 10
     assert Project.objects.filter(slug="imported-project").count() == 0
 
 
@@ -1126,6 +1141,55 @@ def test_services_store_project_from_dict_with_issue_priorities_names_as_None(cl
 
     project = services.store_project_from_dict(data, owner=user)
     assert project.issues.first().priority.name == "None"
+
+
+def test_services_store_project_from_dict_project_values_due_dates(client):
+    user = f.UserFactory.create()
+    data = {
+        "name": "Imported project",
+        "description": "Imported project",
+        "us_duedates": [
+            {"name": "US Default", "order": 1, "by_default": True, "color": "#9dce0a", "days_to_due": None},
+            {"name": "US Due soon", "order": 2, "by_default": False, "color": "#ff9900", "days_to_due": 6},
+            {"name": "US Past due", "order": 3, "by_default": False, "color": "#ff8a84", "days_to_due": -3}
+        ],
+        "task_duedates": [
+            {"name": "Task Default", "order": 1, "by_default": True, "color": "#9dce0a", "days_to_due": None},
+            {"name": "Task Due soon", "order": 2, "by_default": False, "color": "#ff9900", "days_to_due": 5},
+            {"name": "Task Past due", "order": 3, "by_default": False, "color": "#ff8a84", "days_to_due": -2}
+        ],
+        "issue_duedates": [
+            {"name": "Issue Default", "order": 1, "by_default": True, "color": "#9dce0a", "days_to_due": None},
+            {"name": "Issue Due soon", "order": 2, "by_default": False, "color": "#ff9900", "days_to_due": 4},
+            {"name": "Issue Past due", "order": 3, "by_default": False, "color": "#ff8a84", "days_to_due": -1}
+        ],
+    }
+
+    project = services.store_project_from_dict(data, owner=user)
+
+    us_duedates = project.us_duedates.all()
+    assert us_duedates[0].name == "US Default"
+    assert us_duedates[0].days_to_due is None
+    assert us_duedates[1].name == "US Due soon"
+    assert us_duedates[1].days_to_due == 6
+    assert us_duedates[2].name == "US Past due"
+    assert us_duedates[2].days_to_due == -3
+
+    task_duedates = project.task_duedates.all()
+    assert task_duedates[0].name == "Task Default"
+    assert task_duedates[0].days_to_due is None
+    assert task_duedates[1].name == "Task Due soon"
+    assert task_duedates[1].days_to_due == 5
+    assert task_duedates[2].name == "Task Past due"
+    assert task_duedates[2].days_to_due == -2
+
+    issue_duedates = project.issue_duedates.all()
+    assert issue_duedates[0].name == "Issue Default"
+    assert issue_duedates[0].days_to_due is None
+    assert issue_duedates[1].name == "Issue Due soon"
+    assert issue_duedates[1].days_to_due == 4
+    assert issue_duedates[2].name == "Issue Past due"
+    assert issue_duedates[2].days_to_due == -1
 
 
 ##################################################################

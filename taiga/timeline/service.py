@@ -142,11 +142,14 @@ def get_timeline(obj, namespace=None):
     from .models import Timeline
 
     ct = ContentType.objects.get_for_model(obj.__class__)
-    timeline = Timeline.objects.filter(content_type=ct, object_id=obj.pk)
+    timeline = Timeline.objects.filter(content_type=ct)
+
     if namespace is not None:
         timeline = timeline.filter(namespace=namespace)
+    else:
+        timeline = timeline.filter(object_id=obj.pk)
 
-    timeline = timeline.order_by("-created", "-id")
+    timeline = timeline.order_by("-created")
     return timeline
 
 
@@ -182,7 +185,7 @@ def filter_timeline_for_user(timeline, user):
                    data_content_type=membership_content_type)
 
     # Filtering private projects where user is member
-    if not user.is_anonymous():
+    if not user.is_anonymous:
         for membership in user.cached_memberships:
             # Admin roles can see everything in a project
             if membership.is_admin:

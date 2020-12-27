@@ -23,22 +23,29 @@ from functools import partial
 from django.apps import apps
 from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.conf import settings
 from django.utils.translation import ugettext as _
 
 from taiga.base import exceptions as exc
 from taiga.base.mails import InlineCSSTemplateMail
+from taiga.front.templatetags.functions import resolve as resolve_front_url
 from taiga.projects.notifications.choices import NotifyLevel
 from taiga.projects.history.choices import HistoryType
 from taiga.projects.history.services import (make_key_from_model_object,
                                              get_last_snapshot_for_key,
                                              get_model_from_key)
 from taiga.permissions.services import user_has_perm
+from taiga.events import events
 
 from .models import HistoryChangeNotification, Watched
+from .squashing import squash_history_entries
+
+
+def remove_lr_cr(s):
+    return s.replace("\n", "").replace("\r", "")
 
 
 def notify_policy_exists(project, user) -> bool:
@@ -52,7 +59,8 @@ def notify_policy_exists(project, user) -> bool:
     return qs.exists()
 
 
-def create_notify_policy(project, user, level=NotifyLevel.involved):
+def create_notify_policy(project, user, level=NotifyLevel.involved,
+                         live_level=NotifyLevel.involved):
     """
     Given a project and user, create notification policy for it.
     """
@@ -60,23 +68,35 @@ def create_notify_policy(project, user, level=NotifyLevel.involved):
     try:
         return model_cls.objects.create(project=project,
                                         user=user,
-                                        notify_level=level)
+                                        notify_level=level,
+                                        live_notify_level=live_level)
     except IntegrityError as e:
-        raise exc.IntegrityError(_("Notify exists for specified user and project")) from e
+        raise exc.IntegrityError(
+            _("Notify exists for specified user and project")) from e
 
 
-def create_notify_policy_if_not_exists(project, user, level=NotifyLevel.involved):
+def create_notify_policy_if_not_exists(project, user,
+                                       level=NotifyLevel.involved,
+                                       live_level=NotifyLevel.involved,
+                                       web_level=True):
     """
     Given a project and user, create notification policy for it.
     """
     model_cls = apps.get_model("notifications", "NotifyPolicy")
     try:
-        result = model_cls.objects.get_or_create(project=project,
-                                                 user=user,
-                                                 defaults={"notify_level": level})
+        result = model_cls.objects.get_or_create(
+            project=project,
+            user=user,
+            defaults={
+                "notify_level": level,
+                "live_notify_level": live_level,
+                "web_notify_level": web_level
+            }
+        )
         return result[0]
     except IntegrityError as e:
-        raise exc.IntegrityError(_("Notify exists for specified user and project")) from e
+        raise exc.IntegrityError(
+            _("Notify exists for specified user and project")) from e
 
 
 def analize_object_for_watchers(obj: object, comment: str, user: object):
@@ -84,27 +104,38 @@ def analize_object_for_watchers(obj: object, comment: str, user: object):
     Generic implementation for analize model objects and
     extract mentions from it and add it to watchers.
     """
-
-    if not hasattr(obj, "get_project"):
+    if not hasattr(obj, "add_watcher"):
         return
 
-    if not hasattr(obj, "add_watcher"):
+    # Adding the person who edited the object to the watchers
+    if comment and not user.is_system:
+        obj.add_watcher(user)
+
+    mentions = get_object_mentions(obj, comment) or []
+    for mentioned in mentions:
+        obj.add_watcher(mentioned)
+
+
+def get_object_mentions(obj: object, comment: str):
+    """
+    Generic implementation for analize model objects and
+    extract mentions from it.
+    """
+    if not hasattr(obj, "get_project"):
         return
 
     texts = (getattr(obj, "description", ""),
              getattr(obj, "content", ""),
              comment,)
 
+    return get_mentions(obj.get_project(), "\n".join(texts))
+
+
+def get_mentions(project: object, text: str):
     from taiga.mdrender.service import render_and_extract
-    _, data = render_and_extract(obj.get_project(), "\n".join(texts))
+    _, data = render_and_extract(project, text)
 
-    if data["mentions"]:
-        for user in data["mentions"]:
-            obj.add_watcher(user)
-
-    # Adding the person who edited the object to the watchers
-    if comment and not user.is_system:
-        obj.add_watcher(user)
+    return data.get("mentions")
 
 
 def _filter_by_permissions(obj, user):
@@ -131,7 +162,7 @@ def _filter_notificable(user):
     return user.is_active and not user.is_system
 
 
-def get_users_to_notify(obj, *, history=None, discard_users=None) -> list:
+def get_users_to_notify(obj, *, history=None, discard_users=None, live=False) -> list:
     """
     Get filtered set of users to notify for specified
     model instance and changer.
@@ -143,6 +174,8 @@ def get_users_to_notify(obj, *, history=None, discard_users=None) -> list:
 
     def _check_level(project: object, user: object, levels: tuple) -> bool:
         policy = project.cached_notify_policy_for_user(user)
+        if live:
+            return policy.live_notify_level in levels
         return policy.notify_level in levels
 
     _can_notify_hard = partial(_check_level, project,
@@ -157,8 +190,12 @@ def get_users_to_notify(obj, *, history=None, discard_users=None) -> list:
     candidates.update(filter(_can_notify_light, obj.get_participants()))
 
     # If the history is an unassignment change we should notify that user too
+    user_ids = []
     if history and history.type == HistoryType.change and "assigned_to" in history.diff:
-        assigned_to_users = get_user_model().objects.filter(id__in=history.diff["assigned_to"])
+        user_ids = [user_id for user_id in history.diff["assigned_to"] if isinstance(user_id, int)]
+
+    if user_ids:
+        assigned_to_users = get_user_model().objects.filter(id__in=user_ids)
         candidates.update(filter(_can_notify_light, assigned_to_users))
 
     # Remove the changer from candidates
@@ -219,7 +256,6 @@ def send_notifications(obj, *, history):
                                             owner=owner,
                                             project=obj.project,
                                             history_type=history.type))
-
     notification.updated_datetime = timezone.now()
     notification.save()
     notification.history_entries.add(history)
@@ -233,6 +269,10 @@ def send_notifications(obj, *, history):
     if settings.CHANGE_NOTIFICATIONS_MIN_INTERVAL == 0:
         send_sync_notifications(notification.id)
 
+    live_notify_users = get_users_to_notify(obj, history=history, discard_users=[notification.owner], live=True)
+    for user in live_notify_users:
+        events.emit_live_notification_for_model(obj, user, history)
+
 
 @transaction.atomic
 def send_sync_notifications(notification_id):
@@ -243,13 +283,52 @@ def send_sync_notifications(notification_id):
     """
 
     notification = HistoryChangeNotification.objects.select_for_update().get(pk=notification_id)
-    # If the last modification is too recent we ignore it
+
+    # Custom Hardcode Filter
+    if settings.NOTIFICATIONS_CUSTOM_FILTER:
+        allowed_keys = [
+            "userstories.userstory",
+            "epics.epic",
+            "issues.issue",
+        ]
+
+        if not any([(notification.key.find(key) >= 0) for key in allowed_keys]):
+            notification.delete()
+            return False, []
+
+    # If the last modification is too recent we ignore it for the time being
     now = timezone.now()
     time_diff = now - notification.updated_datetime
     if time_diff.seconds < settings.CHANGE_NOTIFICATIONS_MIN_INTERVAL:
-        return
+        return False, []
 
-    history_entries = tuple(notification.history_entries.all().order_by("created_at"))
+    # Custom Hardcode Filter
+    qs = notification.history_entries
+    if settings.NOTIFICATIONS_CUSTOM_FILTER:
+        queries = [
+            ~Q(comment=""),
+            Q(key__startswith="epics.epic", type=HistoryType.create),
+            Q(Q(key__startswith="userstories.userstory"), ~Q(values__users={}), ~Q(values__users=[])),
+            Q(Q(key__startswith="issues.issue"), ~Q(values__users={}), ~Q(values__users=[])),
+        ]
+        query = queries.pop()
+        for item in queries:
+            query |= item
+
+        qs = qs.filter(query).order_by("created_at")
+
+    else:
+        qs = qs.all()
+
+    history_entries = tuple(qs)
+    history_entries = list(squash_history_entries(history_entries))
+
+    # If there are no effective modifications we can delete this notification
+    # without further processing
+    if notification.history_type == HistoryType.change and not history_entries:
+        notification.delete()
+        return False, []
+
     obj, _ = get_last_snapshot_for_key(notification.key)
     obj_class = get_model_from_key(obj.key)
 
@@ -272,9 +351,11 @@ def send_sync_notifications(notification_id):
         msg_id = 'taiga-system'
 
     now = datetime.datetime.now()
+    project_name = remove_lr_cr(notification.project.name)
     format_args = {
+        "unsubscribe_url": resolve_front_url('settings-mail-notifications'),
         "project_slug": notification.project.slug,
-        "project_name": notification.project.name,
+        "project_name": project_name,
         "msg_id": msg_id,
         "time": int(now.timestamp()),
         "domain": domain
@@ -285,7 +366,8 @@ def send_sync_notifications(notification_id):
         "In-Reply-To": "<{project_slug}/{msg_id}@{domain}>".format(**format_args),
         "References": "<{project_slug}/{msg_id}@{domain}>".format(**format_args),
         "List-ID": 'Taiga/{project_name} <taiga.{project_slug}@{domain}>'.format(**format_args),
-        "Thread-Index": make_ms_thread_index("<{project_slug}/{msg_id}@{domain}>".format(**format_args), now)
+        "Thread-Index": make_ms_thread_index("<{project_slug}/{msg_id}@{domain}>".format(**format_args), now),
+        "List-Unsubscribe": "<{unsubscribe_url}>".format(**format_args),
     }
 
     for user in notification.notify_users.distinct():
@@ -293,7 +375,9 @@ def send_sync_notifications(notification_id):
         context["lang"] = user.lang or settings.LANGUAGE_CODE
         email.send(user.email, context, headers=headers)
 
+    notification_id = notification.id
     notification.delete()
+    return notification_id, history_entries
 
 
 def process_sync_notifications():
@@ -404,7 +488,11 @@ def add_watcher(obj, user):
         project=obj.project)
 
     notify_policy, _ = apps.get_model("notifications", "NotifyPolicy").objects.get_or_create(
-        project=obj.project, user=user, defaults={"notify_level": NotifyLevel.involved})
+        project=obj.project,
+        user=user,
+        defaults={"notify_level": NotifyLevel.involved,
+                  "live_notify_level": NotifyLevel.involved}
+    )
 
     return watched
 
@@ -426,22 +514,25 @@ def remove_watcher(obj, user):
     qs.delete()
 
 
-def set_notify_policy_level(notify_policy, notify_level):
+def set_notify_policy_level(notify_policy, notify_level, live=False):
     """
     Set notification level for specified policy.
     """
     if notify_level not in [e.value for e in NotifyLevel]:
         raise exc.IntegrityError(_("Invalid value for notify level"))
 
-    notify_policy.notify_level = notify_level
+    if live:
+        notify_policy.live_notify_level = notify_level
+    else:
+        notify_policy.notify_level = notify_level
     notify_policy.save()
 
 
-def set_notify_policy_level_to_ignore(notify_policy):
+def set_notify_policy_level_to_ignore(notify_policy, live=False):
     """
     Set notification level for specified policy.
     """
-    set_notify_policy_level(notify_policy, NotifyLevel.none)
+    set_notify_policy_level(notify_policy, NotifyLevel.none, live=live)
 
 
 def make_ms_thread_index(msg_id, dt):

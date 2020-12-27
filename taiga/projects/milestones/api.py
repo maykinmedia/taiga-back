@@ -27,11 +27,17 @@ from taiga.base.api.mixins import BlockedByProjectMixin
 from taiga.base.api.utils import get_object_or_404
 from taiga.base.utils.db import get_object_or_none
 
+from taiga.projects.models import Project
 from taiga.projects.notifications.mixins import WatchedResourceMixin
 from taiga.projects.notifications.mixins import WatchersViewSetMixin
 from taiga.projects.history.mixins import HistoryResourceMixin
+from taiga.projects.tasks.validators import UpdateMilestoneBulkValidator as \
+    TasksUpdateMilestoneValidator
+from taiga.projects.issues.validators import UpdateMilestoneBulkValidator as \
+    IssuesUpdateMilestoneValidator
 
 from . import serializers
+from . import services
 from . import validators
 from . import models
 from . import permissions
@@ -58,6 +64,12 @@ class MilestoneViewSet(HistoryResourceMixin, WatchedResourceMixin,
         "project__slug",
         "closed"
     )
+    order_by_fields = ("project",
+                       "name",
+                       "estimated_start",
+                       "estimated_finish",
+                       "closed",
+                       "created_date")
     queryset = models.Milestone.objects.all()
 
     def create(self, request, *args, **kwargs):
@@ -135,6 +147,69 @@ class MilestoneViewSet(HistoryResourceMixin, WatchedResourceMixin,
             optimal_points -= optimal_points_per_day
 
         return response.Ok(milestone_stats)
+
+    @detail_route(methods=["POST"])
+    def move_userstories_to_sprint(self, request, pk=None, **kwargs):
+        milestone = get_object_or_404(models.Milestone, pk=pk)
+
+        self.check_permissions(request, "move_related_items", milestone)
+
+        validator = validators.UpdateMilestoneBulkValidator(data=request.DATA)
+        if not validator.is_valid():
+            return response.BadRequest(validator.errors)
+
+        data = validator.data
+        project = get_object_or_404(Project, pk=data["project_id"])
+        milestone_result = get_object_or_404(models.Milestone, pk=data["milestone_id"])
+
+        if data["bulk_stories"]:
+            self.check_permissions(request, "move_uss_to_sprint", project)
+            services.update_userstories_milestone_in_bulk(data["bulk_stories"], milestone_result)
+            services.snapshot_userstories_in_bulk(data["bulk_stories"], request.user)
+
+        return response.NoContent()
+
+    @detail_route(methods=["POST"])
+    def move_tasks_to_sprint(self, request, pk=None, **kwargs):
+        milestone = get_object_or_404(models.Milestone, pk=pk)
+
+        self.check_permissions(request, "move_related_items", milestone)
+
+        validator = TasksUpdateMilestoneValidator(data=request.DATA)
+        if not validator.is_valid():
+            return response.BadRequest(validator.errors)
+
+        data = validator.data
+        project = get_object_or_404(Project, pk=data["project_id"])
+        milestone_result = get_object_or_404(models.Milestone, pk=data["milestone_id"])
+
+        if data["bulk_tasks"]:
+            self.check_permissions(request, "move_tasks_to_sprint", project)
+            services.update_tasks_milestone_in_bulk(data["bulk_tasks"], milestone_result)
+            services.snapshot_tasks_in_bulk(data["bulk_tasks"], request.user)
+
+        return response.NoContent()
+
+    @detail_route(methods=["POST"])
+    def move_issues_to_sprint(self, request, pk=None, **kwargs):
+        milestone = get_object_or_404(models.Milestone, pk=pk)
+
+        self.check_permissions(request, "move_related_items", milestone)
+
+        validator = IssuesUpdateMilestoneValidator(data=request.DATA)
+        if not validator.is_valid():
+            return response.BadRequest(validator.errors)
+
+        data = validator.data
+        project = get_object_or_404(Project, pk=data["project_id"])
+        milestone_result = get_object_or_404(models.Milestone, pk=data["milestone_id"])
+
+        if data["bulk_issues"]:
+            self.check_permissions(request, "move_issues_to_sprint", project)
+            services.update_issues_milestone_in_bulk(data["bulk_issues"], milestone_result)
+            services.snapshot_issues_in_bulk(data["bulk_issues"], request.user)
+
+        return response.NoContent()
 
 
 class MilestoneWatchersViewSet(WatchersViewSetMixin, ModelListViewSet):

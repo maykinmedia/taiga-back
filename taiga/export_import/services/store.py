@@ -26,6 +26,7 @@ from unidecode import unidecode
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import utils
 from django.template.defaultfilters import slugify
 from django.utils.translation import ugettext as _
 
@@ -202,7 +203,11 @@ def _store_membership(project, membership):
         validator.object.token = str(uuid.uuid1())
         validator.object.user = find_invited_user(validator.object.email,
                                                   default=validator.object.user)
-        validator.save()
+        try:
+            validator.save()
+        except utils.IntegrityError:
+            # Avoid import errors when the project has duplicated invitations
+            return
         return validator
 
     add_errors("memberships", validator.errors)
@@ -212,7 +217,9 @@ def _store_membership(project, membership):
 def store_memberships(project, data):
     results = []
     for membership in data.get("memberships", []):
-        results.append(_store_membership(project, membership))
+        member = _store_membership(project, membership)
+        if member:
+            results.append(member)
     return results
 
 
@@ -233,7 +240,8 @@ def _store_project_attribute_value(project, data, field, serializer):
 def store_project_attributes_values(project, data, field, serializer):
     result = []
     for choice_data in data.get(field, []):
-        result.append(_store_project_attribute_value(project, choice_data, field, serializer))
+        result.append(_store_project_attribute_value(project, choice_data, field,
+                                                     serializer))
     return result
 
 
@@ -330,7 +338,7 @@ def store_user_story(project, data):
         data["status"] = project.default_us_status.name
 
     us_data = {key: value for key, value in data.items() if key not in
-               ["role_points", "custom_attributes_values"]}
+               ["role_points", "custom_attributes_values", 'generated_from_task', 'generated_from_issue']}
 
     validator = validators.UserStoryExportValidator(data=us_data, context={"project": project})
 
@@ -385,11 +393,34 @@ def store_user_story(project, data):
 
 
 def store_user_stories(project, data):
-    results = []
+    user_stories = {}
     for userstory in data.get("user_stories", []):
-        us = store_user_story(project, userstory)
-        results.append(us)
-    return results
+        validator = store_user_story(project, userstory)
+        if validator:
+            user_stories[validator.object.ref] = validator.object
+    return user_stories
+
+
+def store_user_stories_related_entities(imported_user_stories,
+                                        imported_tasks,
+                                        imported_issues,
+                                        data):
+    for us_data in data.get("user_stories", []):
+        us = imported_user_stories.get(us_data.get('ref'))
+        if not us or \
+                not (us_data.get('generated_from_task')
+                     or us_data.get('generated_from_issue')):
+            continue
+
+        if us_data.get('generated_from_task'):
+            generated_from_task_ref = int(us_data.get('generated_from_task'))
+            us.generated_from_task = imported_tasks.get(generated_from_task_ref)
+
+        if us_data.get('generated_from_issue'):
+            generated_from_issue_ref = int(us_data.get('generated_from_issue'))
+            us.generated_from_issue = imported_issues.get(generated_from_issue_ref)
+
+        us.save()
 
 
 ## EPICS
@@ -523,11 +554,12 @@ def store_task(project, data):
 
 
 def store_tasks(project, data):
-    results = []
+    tasks = {}
     for task in data.get("tasks", []):
-        task = store_task(project, task)
-        results.append(task)
-    return results
+        validator = store_task(project, task)
+        if validator:
+            tasks[validator.object.ref] = validator.object
+    return tasks
 
 
 ## ISSUES
@@ -594,9 +626,11 @@ def store_issue(project, data):
 
 
 def store_issues(project, data):
-    issues = []
+    issues = {}
     for issue in data.get("issues", []):
-        issues.append(store_issue(project, issue))
+        validator = store_issue(project, issue)
+        if validator:
+            issues[validator.object.ref] = validator.object
     return issues
 
 
@@ -725,7 +759,8 @@ def _create_project_object(data):
 
 
 def _create_membership_for_project_owner(project):
-    if project.memberships.filter(user=project.owner).count() == 0:
+    owner_membership = project.memberships.filter(user=project.owner).first()
+    if owner_membership is None:
         if project.roles.all().count() > 0:
             Membership.objects.create(
                 project=project,
@@ -734,6 +769,9 @@ def _create_membership_for_project_owner(project):
                 role=project.roles.all().first(),
                 is_admin=True
             )
+    elif not owner_membership.is_admin:
+            owner_membership.is_admin = True
+            owner_membership.save()
 
 
 def _populate_project_object(project, data):
@@ -760,11 +798,14 @@ def _populate_project_object(project, data):
     store_project_attributes_values(project, data, "issue_statuses", validators.IssueStatusExportValidator)
     store_project_attributes_values(project, data, "priorities", validators.PriorityExportValidator)
     store_project_attributes_values(project, data, "severities", validators.SeverityExportValidator)
+    store_project_attributes_values(project, data, "us_duedates", validators.UserStoryDueDateExportValidator)
+    store_project_attributes_values(project, data, "task_duedates", validators.TaskDueDateExportValidator)
+    store_project_attributes_values(project, data, "issue_duedates", validators.IssueDueDateExportValidator)
     check_if_there_is_some_error(_("error importing lists of project attributes"), project)
 
     # Create default values for project attributes
     store_default_project_attributes_values(project, data)
-    check_if_there_is_some_error(_("error importing default project attributes values"), project)
+    check_if_there_is_some_error(_("error importing default project attribute values"), project)
 
     # Create custom attributes
     store_custom_attributes(project, data, "epiccustomattributes",
@@ -776,26 +817,28 @@ def _populate_project_object(project, data):
     store_custom_attributes(project, data, "issuecustomattributes",
                             validators.IssueCustomAttributeExportValidator)
     check_if_there_is_some_error(_("error importing custom attributes"), project)
-
     # Create milestones
     store_milestones(project, data)
     check_if_there_is_some_error(_("error importing sprints"), project)
 
     # Create issues
-    store_issues(project, data)
+    imported_issues = store_issues(project, data)
     check_if_there_is_some_error(_("error importing issues"), project)
 
     # Create user stories
-    store_user_stories(project, data)
+    imported_user_stories = store_user_stories(project, data)
     check_if_there_is_some_error(_("error importing user stories"), project)
 
-    # Creat epics
+    # Create epics
     store_epics(project, data)
     check_if_there_is_some_error(_("error importing epics"), project)
 
-    # Createer tasks
-    store_tasks(project, data)
+    # Create tasks
+    imported_tasks = store_tasks(project, data)
     check_if_there_is_some_error(_("error importing tasks"), project)
+
+    # Create user stories relationships
+    store_user_stories_related_entities(imported_user_stories, imported_tasks, imported_issues, data)
 
     # Create wiki pages
     store_wiki_pages(project, data)
@@ -829,10 +872,10 @@ def store_project_from_dict(data, owner=None):
     try:
         _populate_project_object(project, data)
     except err.TaigaImportError:
-        # reraise known inport errors
+        # raise known inport errors
         raise
-    except Exception:
-        # reise unknown errors as import error
+    except Exception as e:
+        # raise unknown errors as import error
         raise err.TaigaImportError(_("unexpected error importing project"), project)
 
     return project

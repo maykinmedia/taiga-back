@@ -19,6 +19,7 @@
 from importlib import import_module
 
 import random
+import uuid
 import re
 
 from django.apps import apps
@@ -125,12 +126,18 @@ class PermissionsMixin(models.Model):
         return self.is_superuser
 
 
+def get_default_uuid():
+    return uuid.uuid4().hex
+
+
 class User(AbstractBaseUser, PermissionsMixin):
+    uuid = models.CharField(max_length=32, editable=False, null=False,
+                            blank=False, unique=True, default=get_default_uuid)
     username = models.CharField(_("username"), max_length=255, unique=True,
         help_text=_("Required. 30 characters or fewer. Letters, numbers and "
                     "/./-/_ characters"),
         validators=[
-            validators.RegexValidator(re.compile("^[\w.-]+$"), _("Enter a valid username."), "invalid")
+            validators.RegexValidator(re.compile(r"^[\w.-]+$"), _("Enter a valid username."), "invalid")
         ])
     email = models.EmailField(_("email address"), max_length=255, blank=True, unique=True)
     is_active = models.BooleanField(_("active"), default=True,
@@ -145,6 +152,8 @@ class User(AbstractBaseUser, PermissionsMixin):
                              max_length=500, null=True, blank=True,
                              verbose_name=_("photo"))
     date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
+    accepted_terms = models.BooleanField(_("accepted terms"), default=True)
+    read_new_terms = models.BooleanField(_("new terms read"), default=False)
     lang = models.CharField(max_length=20, null=True, blank=True, default="",
                             verbose_name=_("default language"))
     theme = models.CharField(max_length=100, null=True, blank=True, default="",
@@ -160,7 +169,7 @@ class User(AbstractBaseUser, PermissionsMixin):
                          verbose_name=_("email token"))
 
     new_email = models.EmailField(_("new email address"), null=True, blank=True)
-
+    verified_email = models.BooleanField(null=False, blank=False, default=True)
     is_system = models.BooleanField(null=False, blank=False, default=False)
 
 
@@ -304,14 +313,20 @@ class Role(models.Model):
     slug = models.SlugField(max_length=250, null=False, blank=True,
                             verbose_name=_("slug"))
     permissions = ArrayField(models.TextField(null=False, blank=False, choices=MEMBERS_PERMISSIONS),
-                             null=True, blank=True, default=[], verbose_name=_("permissions"))
+                             null=True, blank=True, default=list, verbose_name=_("permissions"))
     order = models.IntegerField(default=10, null=False, blank=False,
                                 verbose_name=_("order"))
     # null=True is for make work django 1.7 migrations. project
     # field causes some circular dependencies, and due to this
     # it can not be serialized in one transactional migration.
-    project = models.ForeignKey("projects.Project", null=True, blank=False,
-                                related_name="roles", verbose_name=_("project"))
+    project = models.ForeignKey(
+        "projects.Project",
+        null=True,
+        blank=False,
+        related_name="roles",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
     computable = models.BooleanField(default=True)
 
     def save(self, *args, **kwargs):
@@ -331,7 +346,7 @@ class Role(models.Model):
 
 
 class AuthData(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="auth_data")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="auth_data", on_delete=models.CASCADE)
     key = models.SlugField(max_length=50)
     value = models.CharField(max_length=300)
     extra = JSONField()
