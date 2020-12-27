@@ -2,6 +2,198 @@
 
 ## Unreleased
 
+## 5.5.9 (2020-12-21)
+
+### Fix
+
+- Fix attachment refresh feature.
+
+- Fix welcome email template layout.
+
+### Misc
+
+- Updated requirements. **Please note that Python 3.5 is not supported**.
+
+- Several minor changes.
+
+### i18n
+
+- Add Arabic.
+
+- Update Russian.
+
+## 5.5.7 (2020-11-11)
+
+### Misc
+
+- Upgrade requirements.
+
+- Fix deprecation warnings.
+
+## 5.5.5 (2020-09-16)
+
+### Misc
+
+- Improve verify email feature for invited users.
+
+### i18n
+
+- Update catalog.
+
+- Update fa.
+
+## 5.5.4 (2020-09-08)
+
+### Misc
+
+- Upgrade requirements.
+
+### i18n
+
+- Update French translation.
+
+## 5.5.3 (2020-09-02)
+
+### Misc
+
+- Parametrize mdrender cache options.
+
+- Minor bug fix.
+
+## 5.5.2 (2020-08-26)
+
+### Misc
+
+- Tweaks mdrender cache.
+
+## 5.5.1 (2020-08-23)
+
+### Features
+
+- Prevent member creation to users with unverified email address.
+
+## 5.5.0 (2020-08-19)
+
+### Features
+
+- Verify user email.
+
+- Task promotion creates user story and deletes original task.
+
+### Misc
+
+- Upgraded Django version to 2.2. This is a BREAKING CHANGE. Contributed
+  modules should be upgraded.
+
+- Several minor bugfixes.
+
+## 5.0.15 (2020-06-17)
+
+### Misc
+
+- Fixed bug old dump format project import.
+
+## 5.0.14 (2020-06-16)
+
+### Misc
+
+- Fixed several minor bugs.
+
+## 5.0.13 (2020-06-08)
+
+### Features
+
+- Resolved Django deprecation warnings to prepare for an upgrade.
+
+- Added option to disallow anonymous access to user profiles.
+
+### Misc
+
+- Updated requirements.
+
+- Use pip-tools to manage dependencies.
+
+### i18n
+
+- Updated translations (lv).
+
+## 5.0.12 (2020-05-12)
+
+### Security
+
+- Avoid change in membership attribute. We encourage all users of Taiga
+  to upgrade as soon as possible.
+
+## 5.0.11 (2020-05-04)
+
+### Misc
+
+- Fixed several minor bugs.
+
+- Updated requirements.
+
+### i18n
+
+- Updated translations (es, lv, ru, tr, uk).
+
+## 5.0.9 (2020-03-11)
+
+### Feature
+
+- Implemented new simplified email messages.
+
+### Misc
+
+- Fixed several minor bugs.
+
+- Updated requirements.
+
+### i18n
+
+- Updated lots of strings and updated their translations.
+
+## 5.0.8 (2020-02-17)
+
+### i18n
+
+- Update Basque translation and others.
+
+### Misc
+
+- Several minor bugfixes.
+
+## 5.0.7 (2020-02-06)
+
+### Feature
+
+- Add reduce notifications configuration option.
+
+- Sanitize full name input.
+
+### i18n
+
+- Add Latvian translation.
+
+### Misc
+
+- Several minor bugfixes.
+
+## 5.0.6 (2020-01-15)
+
+### Misc
+
+- Minor fix on contact project team feature.
+
+## 5.0.5 (2020-01-08)
+
+### Feature
+
+- Promote task and issues to user story with watchers, attachments and comments.
+
+### Misc
+
+- Several minor bugfixes and translation updates.
+
 ## 5.0.0 (2019-11-13)
 
 - Refresh attachment URL on markdown fields to support protected backend.
@@ -162,12 +354,12 @@
 
 - Minor icon changes
 - Lots of small bugfixes
- 
+
 ## 3.4.5 (2018-10-15)
 
 ### Features
 
-- Prevent local Webhooks 
+- Prevent local Webhooks
 
 ## 3.4.4 (2018-09-19)
 

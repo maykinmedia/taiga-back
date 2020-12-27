@@ -49,7 +49,7 @@ These fields allow you to specify the style that should be used to represent
 model relationships, including hyperlinks, primary keys, or slugs.
 """
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.urlresolvers import resolve, get_script_prefix, NoReverseMatch
+from django.urls import resolve, get_script_prefix, NoReverseMatch
 from django import forms
 from django.db.models.fields import BLANK_CHOICE_DASH
 from django.forms import widgets
@@ -118,7 +118,7 @@ class RelatedField(WritableField):
             if hasattr(manager, "related"):  # Forward
                 self.queryset = manager.related.model._default_manager.all()
             else:  # Reverse
-                self.queryset = manager.field.rel.to._default_manager.all()
+                self.queryset = manager.field.remote_field.model._default_manager.all()
 
     ### We need this stuff to make form choices work...
 

@@ -23,17 +23,26 @@ from taiga.base.api.permissions import IsAuthenticated
 from taiga.base.api.permissions import HasProjectPerm
 from taiga.base.api.permissions import IsProjectAdmin
 from taiga.base.api.permissions import PermissionComponent
+from django.conf import settings
 
 
 class IsTheSameUser(PermissionComponent):
     def check_permissions(self, request, view, obj=None):
-        return obj and request.user.is_authenticated() and request.user.pk == obj.pk
+        return obj and request.user.is_authenticated and request.user.pk == obj.pk
+
+
+class CanRetrieveUser(PermissionComponent):
+    def check_permissions(self, request, view, obj=None):
+        if settings.PRIVATE_USER_PROFILES:
+            return obj and request.user and request.user.is_authenticated()
+
+        return True
 
 
 class UserPermission(TaigaResourcePermission):
     enought_perms = IsSuperUser()
     global_perms = None
-    retrieve_perms = AllowAny()
+    retrieve_perms = CanRetrieveUser()
     by_username_perms = retrieve_perms
     update_perms = IsTheSameUser()
     partial_update_perms = IsTheSameUser()
@@ -51,6 +60,7 @@ class UserPermission(TaigaResourcePermission):
     liked_perms = AllowAny()
     voted_perms = AllowAny()
     watched_perms = AllowAny()
+    send_verification_email_perms = IsAuthenticated()
 
 
 class RolesPermission(TaigaResourcePermission):

@@ -19,7 +19,7 @@
 
 import pytest
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.core import mail
 
 from .. import factories
@@ -273,3 +273,34 @@ def test_register_success_throttling(client, settings):
     assert response.status_code == 429
 
     settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["register-success"] = None
+
+
+INVALID_NAMES = [
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod",
+    "an <script>evil()</script> example",
+    "http://testdomain.com",
+    "https://testdomain.com",
+    "Visit http://testdomain.com",
+]
+
+@pytest.mark.parametrize("full_name", INVALID_NAMES)
+def test_register_sanitize_invalid_user_full_name(client, settings, full_name, register_form):
+    settings.PUBLIC_REGISTER_ENABLED = True
+    register_form["full_name"] = full_name
+    response = client.post(reverse("auth-register"), register_form)
+    assert response.status_code == 400
+
+VALID_NAMES = [
+    "martin seamus mcfly"
+]
+
+@pytest.mark.parametrize("full_name", VALID_NAMES)
+def test_register_sanitize_valid_user_full_name(client, settings, full_name, register_form):
+    settings.PUBLIC_REGISTER_ENABLED = True
+    register_form["full_name"] = full_name
+    response = client.post(reverse("auth-register"), register_form)
+    assert response.status_code == 201
+
+
+
+

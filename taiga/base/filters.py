@@ -21,6 +21,7 @@ import logging
 from dateutil.parser import parse as parse_date
 
 from django.apps import apps
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q, OuterRef, Subquery
 from django.utils.translation import ugettext as _
@@ -34,9 +35,9 @@ logger = logging.getLogger(__name__)
 
 def get_filter_expression_can_view_projects(user, project_id=None):
     # Filter by user permissions
-    if user.is_authenticated() and user.is_superuser:
+    if user.is_authenticated and user.is_superuser:
         return Q()
-    elif user.is_authenticated():
+    elif user.is_authenticated:
         # authenticated user & project member
         membership_model = apps.get_model("projects", "Membership")
         memberships_qs = membership_model.objects.filter(user=user)
@@ -172,9 +173,9 @@ class PermissionBasedFilterBackend(FilterBackend):
 
         qs = queryset
 
-        if request.user.is_authenticated() and request.user.is_superuser:
+        if request.user.is_authenticated and request.user.is_superuser:
             qs = qs
-        elif request.user.is_authenticated():
+        elif request.user.is_authenticated:
             membership_model = apps.get_model('projects', 'Membership')
             memberships_qs = membership_model.objects.filter(user=request.user)
             if project_id:
@@ -282,9 +283,9 @@ class MembersFilterBackend(PermissionBasedFilterBackend):
             Project = apps.get_model('projects', 'Project')
             project = get_object_or_404(Project, pk=project_id)
 
-        if request.user.is_authenticated() and request.user.is_superuser:
+        if request.user.is_authenticated and request.user.is_superuser:
             qs = qs
-        elif request.user.is_authenticated():
+        elif request.user.is_authenticated:
             Membership = apps.get_model('projects', 'Membership')
             memberships_qs = Membership.objects.filter(user=request.user)
             if project_id:
@@ -328,10 +329,10 @@ class BaseIsProjectAdminFilterBackend(object):
         if hasattr(view, "filter_fields") and "project" in view.filter_fields:
             project_id = request.QUERY_PARAMS.get("project", None)
 
-        if request.user.is_authenticated() and request.user.is_superuser:
+        if request.user.is_authenticated and request.user.is_superuser:
             return None
 
-        if not request.user.is_authenticated():
+        if not request.user.is_authenticated:
             return []
 
         membership_model = apps.get_model('projects', 'Membership')
@@ -454,8 +455,11 @@ class AssignedUsersFilter(FilterModelAssignedUsers, BaseRelatedFieldsFilter):
 
     def filter_user_projects(self, request):
         membership_model = apps.get_model('projects', 'Membership')
-        memberships_project_ids = membership_model.objects.filter(user=request.user).values(
-            'project_id')
+        if isinstance(request.user, AnonymousUser):
+            return None
+        else:
+            memberships_project_ids = membership_model.objects.filter(user=request.user).values(
+                'project_id')
 
         return Subquery(memberships_project_ids)
 
@@ -463,7 +467,8 @@ class AssignedUsersFilter(FilterModelAssignedUsers, BaseRelatedFieldsFilter):
         if self.filter_name in request.QUERY_PARAMS or \
                 self.exclude_param_name in request.QUERY_PARAMS:
             projects_ids_subquery = self.filter_user_projects(request)
-            queryset = queryset.filter(project_id__in=projects_ids_subquery)
+            if projects_ids_subquery:
+                queryset = queryset.filter(project_id__in=projects_ids_subquery)
 
         return super().filter_queryset(request, queryset, view)
 

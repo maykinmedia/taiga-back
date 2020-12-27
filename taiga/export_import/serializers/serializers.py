@@ -269,6 +269,7 @@ class UserStoryExportSerializer(CustomAttributesValuesExportSerializerMixin,
     finish_date = DateTimeField()
     generated_from_issue = SlugRelatedField(slug_field="ref")
     generated_from_task = SlugRelatedField(slug_field="ref")
+    from_task_ref = Field()
     ref = Field()
     is_closed = Field()
     backlog_order = Field()
@@ -306,6 +307,13 @@ class UserStoryExportSerializer(CustomAttributesValuesExportSerializerMixin,
 class EpicRelatedUserStoryExportSerializer(RelatedExportSerializer):
     user_story = SlugRelatedField(slug_field="ref")
     order = Field()
+    source_project_slug = MethodField()
+
+    def get_source_project_slug(self, obj):
+        if obj.epic.project.slug != obj.user_story.project.slug:
+            return obj.user_story.project.slug
+
+        return None
 
 
 class EpicExportSerializer(CustomAttributesValuesExportSerializerMixin,

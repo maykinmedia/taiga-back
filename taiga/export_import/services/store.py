@@ -759,7 +759,8 @@ def _create_project_object(data):
 
 
 def _create_membership_for_project_owner(project):
-    if project.memberships.filter(user=project.owner).count() == 0:
+    owner_membership = project.memberships.filter(user=project.owner).first()
+    if owner_membership is None:
         if project.roles.all().count() > 0:
             Membership.objects.create(
                 project=project,
@@ -768,6 +769,9 @@ def _create_membership_for_project_owner(project):
                 role=project.roles.all().first(),
                 is_admin=True
             )
+    elif not owner_membership.is_admin:
+            owner_membership.is_admin = True
+            owner_membership.save()
 
 
 def _populate_project_object(project, data):
@@ -794,11 +798,14 @@ def _populate_project_object(project, data):
     store_project_attributes_values(project, data, "issue_statuses", validators.IssueStatusExportValidator)
     store_project_attributes_values(project, data, "priorities", validators.PriorityExportValidator)
     store_project_attributes_values(project, data, "severities", validators.SeverityExportValidator)
+    store_project_attributes_values(project, data, "us_duedates", validators.UserStoryDueDateExportValidator)
+    store_project_attributes_values(project, data, "task_duedates", validators.TaskDueDateExportValidator)
+    store_project_attributes_values(project, data, "issue_duedates", validators.IssueDueDateExportValidator)
     check_if_there_is_some_error(_("error importing lists of project attributes"), project)
 
     # Create default values for project attributes
     store_default_project_attributes_values(project, data)
-    check_if_there_is_some_error(_("error importing default project attributes values"), project)
+    check_if_there_is_some_error(_("error importing default project attribute values"), project)
 
     # Create custom attributes
     store_custom_attributes(project, data, "epiccustomattributes",

@@ -28,7 +28,7 @@ import pytz
 
 from unittest.mock import MagicMock, patch
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils import timezone
 
 from django.apps import apps
@@ -94,17 +94,21 @@ def test_notify_policy_existence():
 def test_analize_object_for_watchers():
     user1 = f.UserFactory.create()
     user2 = f.UserFactory.create()
+    project = f.ProjectFactory.create()
 
-    issue = MagicMock()
-    issue.description = "Foo @{0} @{1} ".format(user1.username,
-                                                user2.username)
-    issue.content = ""
+    f.MembershipFactory(user=user1, project=project)
+
+    issue = f.IssueFactory(
+        project=project,
+        description="Foo @{0} @{1} ".format(user1.username, user2.username),
+    )
+    issue.add_watcher = MagicMock()
 
     history = MagicMock()
     history.comment = ""
 
     services.analize_object_for_watchers(issue, history.comment, history.owner)
-    assert issue.add_watcher.call_count == 2
+    assert issue.add_watcher.call_count == 1
 
 
 def test_analize_object_for_watchers_adding_owner_non_empty_comment():
@@ -1299,7 +1303,13 @@ def test_us_updated_generates_web_notifications(client):
     member3 = f.MembershipFactory.create(project=project, role=role)
     member4 = f.MembershipFactory.create(project=project, role=role)
 
-    us = f.create_userstory(project=project, owner=member1.user, milestone=None)
+    us = f.create_userstory(
+        project=project,
+        owner=member1.user,
+        assigned_to=member2.user,
+        assigned_users =[],
+        milestone=None
+    )
 
     client.login(member1.user)
     mock_path = "taiga.projects.userstories.api.UserStoryViewSet." \
@@ -1310,14 +1320,13 @@ def test_us_updated_generates_web_notifications(client):
             json.dumps({
                 "description": "Lorem ipsum @%s dolor sit amet" %
                                member4.user.username,
-                "assigned_users": [member2.user.pk],
                 "watchers": [member3.user.pk],
                 "version": us.version
             }),
             content_type="application/json"
         )
 
-    assert 3 == models.WebNotification.objects.count()
+    assert 2 == models.WebNotification.objects.count()
 
     notifications = models.WebNotification.objects.all()
     notification_data = _notification_data(project, member1.user, us,
@@ -1335,12 +1344,40 @@ def test_us_updated_generates_web_notifications(client):
     assert notifications[1].read is None
     assert notifications[1].data == notification_data
 
-    # Notification assigned_users
-    assert notifications[2].user == member2.user
-    assert notifications[2].event_type == WebNotificationType.assigned.value
-    assert notifications[2].read is None
-    assert notifications[2].data == notification_data
 
+def test_us_updated_generates_web_notifications_asigned_users(client):
+    project = f.ProjectFactory.create()
+    role = f.RoleFactory.create(
+        project=project,
+        permissions=['view_us', 'modify_us']
+    )
+    member1 = f.MembershipFactory.create(project=project, role=role)
+    member2 = f.MembershipFactory.create(project=project, role=role)
+
+    us = f.create_userstory(project=project, owner=member1.user, milestone=None)
+
+    client.login(member1.user)
+    mock_path = "taiga.projects.userstories.api.UserStoryViewSet." \
+                "pre_conditions_on_save"
+    with patch(mock_path):
+        client.patch(
+            reverse("userstories-detail", args=[us.pk]),
+            json.dumps({
+                "assigned_users": [member2.user.pk],
+                "version": us.version
+            }),
+            content_type="application/json"
+        )
+
+    assert 1 == models.WebNotification.objects.count()
+
+    notifications = models.WebNotification.objects.all()
+    notification_data = _notification_data(project, member1.user, us, 'userstory')
+
+    assert notifications[0].user == member2.user
+    assert notifications[0].event_type == WebNotificationType.assigned.value
+    assert notifications[0].read is None
+    assert notifications[0].data == notification_data
 
 def test_comment_on_us_generates_web_notifications(client):
     project = f.ProjectFactory.create()

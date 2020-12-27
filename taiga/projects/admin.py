@@ -17,12 +17,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from django.contrib import admin
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.db import transaction
 from django.utils.html import format_html
 from django.utils.translation import ugettext_lazy as _
 
-from taiga.permissions import permissions
+from taiga.permissions.choices import ANON_PERMISSIONS
 from taiga.projects.notifications.admin import NotifyPolicyInline
 from taiga.projects.likes.admin import LikeInline
 from taiga.users.admin import RoleInline
@@ -45,11 +45,11 @@ class MembershipAdmin(admin.ModelAdmin):
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name in ["user", "invited_by"] and getattr(self, 'obj', None):
             kwargs["queryset"] = db_field.related_model.objects.filter(
-                    memberships__project=self.obj.project)
+                memberships__project=self.obj.project)
 
         elif db_field.name in ["role"] and getattr(self, 'obj', None):
             kwargs["queryset"] = db_field.related_model.objects.filter(
-                                         project=self.obj.project)
+                project=self.obj.project)
 
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
@@ -66,11 +66,11 @@ class MembershipInline(admin.TabularInline):
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if (db_field.name in ["user", "invited_by"]):
             kwargs["queryset"] = db_field.related_model.objects.filter(
-                                         memberships__project=self.parent_obj)
+                memberships__project=self.parent_obj)
 
         elif (db_field.name in ["role"]):
             kwargs["queryset"] = db_field.related_model.objects.filter(
-                                                      project=self.parent_obj)
+                project=self.parent_obj)
 
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
@@ -97,7 +97,7 @@ class ProjectAdmin(admin.ModelAdmin):
                        "logo",
                        ("created_date", "modified_date"))
         }),
-        (_("Privacity"), {
+        (_("Privacy"), {
             "fields": (("owner", "blocked_code"),
                        "is_private",
                        ("anon_permissions", "public_permissions"),
@@ -154,14 +154,13 @@ class ProjectAdmin(admin.ModelAdmin):
                               "default_issue_status", "default_issue_type"]):
             if getattr(self, 'obj', None):
                 kwargs["queryset"] = db_field.related_model.objects.filter(
-                                                          project=self.obj)
+                    project=self.obj)
             else:
                 kwargs["queryset"] = db_field.related_model.objects.none()
 
-        elif (db_field.name in ["owner"]
-                and getattr(self, 'obj', None)):
+        elif (db_field.name in ["owner"] and getattr(self, 'obj', None)):
             kwargs["queryset"] = db_field.related_model.objects.filter(
-                                         memberships__project=self.obj.project)
+                memberships__project=self.obj.project)
 
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
@@ -173,7 +172,6 @@ class ProjectAdmin(admin.ModelAdmin):
     actions = [
         "make_public",
         "make_private",
-        "delete_selected"
     ]
 
     @transaction.atomic
@@ -183,7 +181,7 @@ class ProjectAdmin(admin.ModelAdmin):
         for project in queryset.exclude(is_private=False):
             project.is_private = False
 
-            anon_permissions = list(map(lambda perm: perm[0], permissions.ANON_PERMISSIONS))
+            anon_permissions = list(map(lambda perm: perm[0], ANON_PERMISSIONS))
             project.anon_permissions = list(set((project.anon_permissions or []) + anon_permissions))
             project.public_permissions = list(set((project.public_permissions or []) + anon_permissions))
 
@@ -208,8 +206,12 @@ class ProjectAdmin(admin.ModelAdmin):
         self.message_user(request, _("{count} successfully made private.").format(count=total_updates))
     make_private.short_description = _("Make private")
 
-    def delete_selected(self, request, queryset):
-        # NOTE: This must be equal to taiga.projects.models.Project.delete_related_content
+    def delete_queryset(self, request, queryset):
+        # NOTE: Override delete_queryset so its use the same approach used in
+        # taiga.projects.models.Project.delete_related_content.
+        #
+        # More info https://docs.djangoproject.com/en/2.2/ref/contrib/admin/actions/#admin-actions
+
         from taiga.events.apps import (connect_events_signals,
                                        disconnect_events_signals)
         from taiga.projects.tasks.apps import (connect_all_tasks_signals,
@@ -227,17 +229,14 @@ class ProjectAdmin(admin.ModelAdmin):
         disconnect_all_userstories_signals()
         disconnect_memberships_signals()
 
-        r =  admin.actions.delete_selected(self, request, queryset)
-
-        connect_events_signals()
-        connect_all_issues_signals()
-        connect_all_tasks_signals()
-        connect_all_userstories_signals()
-        connect_memberships_signals()
-
-        return r
-    delete_selected.short_description = _("Delete selected %(verbose_name_plural)s")
-
+        try:
+            super().delete_queryset(request, queryset)
+        finally:
+            connect_events_signals()
+            connect_all_issues_signals()
+            connect_all_tasks_signals()
+            connect_all_userstories_signals()
+            connect_memberships_signals()
 
 # User Stories common admins
 class PointsAdmin(admin.ModelAdmin):
@@ -288,6 +287,7 @@ class IssueStatusAdmin(admin.ModelAdmin):
 
 class ProjectTemplateAdmin(admin.ModelAdmin):
     pass
+
 
 admin.site.register(models.IssueStatus, IssueStatusAdmin)
 admin.site.register(models.TaskStatus, TaskStatusAdmin)

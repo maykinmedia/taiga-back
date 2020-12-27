@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .development import *
+from .development import *  # noqa, pylint: disable=unused-wildcard-import
 
 CELERY_ENABLED = False
 
@@ -46,3 +46,17 @@ IMPORTERS['github']['active'] = True
 IMPORTERS['jira']['active'] = True
 IMPORTERS['asana']['active'] = True
 IMPORTERS['trello']['active'] = True
+
+
+if os.getenv('GITHUB_WORKFLOW'):
+    # This is only for GitHubActions
+    DATABASES = {
+        'default': {
+            "ENGINE": "django.db.backends.postgresql",
+            'NAME': 'taiga',
+            'USER': 'postgres',
+            'PASSWORD': 'postgres',
+            'HOST': 'localhost',
+            'PORT': '5432',
+        }
+    }

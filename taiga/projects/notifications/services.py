@@ -23,10 +23,10 @@ from functools import partial
 from django.apps import apps
 from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.conf import settings
 from django.utils.translation import ugettext as _
 
 from taiga.base import exceptions as exc
@@ -107,14 +107,13 @@ def analize_object_for_watchers(obj: object, comment: str, user: object):
     if not hasattr(obj, "add_watcher"):
         return
 
-    mentions = get_object_mentions(obj, comment)
-    if mentions:
-        for user in mentions:
-            obj.add_watcher(user)
-
     # Adding the person who edited the object to the watchers
     if comment and not user.is_system:
         obj.add_watcher(user)
+
+    mentions = get_object_mentions(obj, comment) or []
+    for mentioned in mentions:
+        obj.add_watcher(mentioned)
 
 
 def get_object_mentions(obj: object, comment: str):
@@ -284,20 +283,51 @@ def send_sync_notifications(notification_id):
     """
 
     notification = HistoryChangeNotification.objects.select_for_update().get(pk=notification_id)
+
+    # Custom Hardcode Filter
+    if settings.NOTIFICATIONS_CUSTOM_FILTER:
+        allowed_keys = [
+            "userstories.userstory",
+            "epics.epic",
+            "issues.issue",
+        ]
+
+        if not any([(notification.key.find(key) >= 0) for key in allowed_keys]):
+            notification.delete()
+            return False, []
+
     # If the last modification is too recent we ignore it for the time being
     now = timezone.now()
     time_diff = now - notification.updated_datetime
     if time_diff.seconds < settings.CHANGE_NOTIFICATIONS_MIN_INTERVAL:
-        return
+        return False, []
 
-    history_entries = tuple(notification.history_entries.all().order_by("created_at"))
+    # Custom Hardcode Filter
+    qs = notification.history_entries
+    if settings.NOTIFICATIONS_CUSTOM_FILTER:
+        queries = [
+            ~Q(comment=""),
+            Q(key__startswith="epics.epic", type=HistoryType.create),
+            Q(Q(key__startswith="userstories.userstory"), ~Q(values__users={}), ~Q(values__users=[])),
+            Q(Q(key__startswith="issues.issue"), ~Q(values__users={}), ~Q(values__users=[])),
+        ]
+        query = queries.pop()
+        for item in queries:
+            query |= item
+
+        qs = qs.filter(query).order_by("created_at")
+
+    else:
+        qs = qs.all()
+
+    history_entries = tuple(qs)
     history_entries = list(squash_history_entries(history_entries))
 
     # If there are no effective modifications we can delete this notification
     # without further processing
     if notification.history_type == HistoryType.change and not history_entries:
         notification.delete()
-        return
+        return False, []
 
     obj, _ = get_last_snapshot_for_key(notification.key)
     obj_class = get_model_from_key(obj.key)
@@ -345,8 +375,9 @@ def send_sync_notifications(notification_id):
         context["lang"] = user.lang or settings.LANGUAGE_CODE
         email.send(user.email, context, headers=headers)
 
-
+    notification_id = notification.id
     notification.delete()
+    return notification_id, history_entries
 
 
 def process_sync_notifications():

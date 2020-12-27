@@ -114,10 +114,9 @@ class WatchedResourceMixin:
 
             mention_fields = ['description', 'content']
             for field_name in mention_fields:
-                old_mentions = self._get_old_mentions_in_field(obj, field_name)
-                if not len(old_mentions):
+                if not hasattr(obj, field_name) or not hasattr(obj, "get_project"):
                     continue
-                self._old_mentions = old_mentions
+                self._old_mentions += services.get_mentions(obj.get_project(), getattr(obj, field_name))
 
         return super().update(request, *args, **kwargs)
 
@@ -189,30 +188,22 @@ class WatchedResourceMixin:
 
     def _get_submitted_mentions(self, obj):
         mention_fields = ['description', 'content']
+        new_mentions = []
         for field_name in mention_fields:
-            new_mentions = self._get_new_mentions_in_field(obj, field_name)
-            if len(new_mentions) > 0:
-                return new_mentions
+            if not hasattr(obj, field_name) or not hasattr(obj, "get_project"):
+                continue
+            value = self.request.DATA.get(field_name)
+            if not value:
+                continue
+            new_mentions += services.get_mentions(obj.get_project(), value)
 
-        return []
+        return new_mentions
 
     def _get_mentions_in_comment(self, obj):
         comment = self.request.DATA.get('comment')
-        if comment:
-            return services.get_mentions(obj, comment)
-        return []
-
-    def _get_old_mentions_in_field(self, obj, field_name):
-        if not hasattr(obj, field_name):
+        if not comment or not hasattr(obj, "get_project"):
             return []
-
-        return services.get_mentions(obj, getattr(obj, field_name))
-
-    def _get_new_mentions_in_field(self, obj, field_name):
-        value = self.request.DATA.get(field_name)
-        if not value:
-            return []
-        return services.get_mentions(obj, value)
+        return services.get_mentions(obj.get_project(), comment)
 
 
 class WatchedModelMixin(object):
@@ -294,7 +285,7 @@ class WatchedResourceSerializer(serializers.LightSerializer):
         # The "is_watcher" attribute is attached in the get_queryset of the viewset.
         if "request" in self.context:
             user = self.context["request"].user
-            return user.is_authenticated() and getattr(obj, "is_watcher", False)
+            return user.is_authenticated and getattr(obj, "is_watcher", False)
 
         return False
 
@@ -343,7 +334,7 @@ class EditableWatchedResourceSerializer(serializers.ModelSerializer):
 
             request = self.context.get("request", None)
             user = request.user if request else None
-            if user and user.is_authenticated():
+            if user and user.is_authenticated:
                 obj.is_watcher = user.id in obj.watchers
 
         return super(WatchedResourceSerializer, self).to_native(obj)
@@ -408,29 +399,29 @@ class AssignedToSignalMixin:
 
 
 class AssignedUsersSignalMixin:
-    _old_assigned_users = None
-
     def update(self, request, *args, **kwargs):
+        if not request.DATA.get('assigned_users'):
+            return super().update(request, *args, **kwargs)
+
         if not self.object:
             self.object = self.get_object_or_none()
         obj = self.object
 
-        if hasattr(obj, "assigned_users") and obj.id:
-            self._old_assigned_users = [
-                user for user in obj.assigned_users.all()
-            ].copy()
+        old_assigned_users = [user for user in obj.assigned_users.all()].copy()
+        old_assigned_to = obj.assigned_to if obj.assigned_to else None
 
         result = super().update(request, *args, **kwargs)
 
-        if result and result.data.get('assigned_users'):
-            new_assigned_users = [
-                user_id for user_id in result.data.get('assigned_users')
-                if user_id not in self._old_assigned_users
-                and user_id != self.request.user
-            ]
+        new_assigned_users = [
+            user for user in result.data.get('assigned_users', [])
+            if user not in old_assigned_users
+            and user != old_assigned_to
+            and user != self.request.user
+        ] if 200 <= result.status_code < 300 else []
+
+        if len(new_assigned_users):
             signal_assigned_users.send(sender=self.__class__,
                                        user=self.request.user,
                                        obj=obj,
                                        new_assigned_users=new_assigned_users)
-
         return result

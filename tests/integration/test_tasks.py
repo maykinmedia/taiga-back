@@ -26,12 +26,15 @@ from urllib.parse import quote
 
 from unittest import mock
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 
 from taiga.base.utils import json
 from taiga.permissions.choices import MEMBERS_PERMISSIONS, ANON_PERMISSIONS
 from taiga.projects.occ import OCCResourceMixin
 from taiga.projects.tasks import services
+from taiga.projects.tasks.models import Task
+from taiga.projects.userstories.models import UserStory
+from taiga.projects.votes.services import add_vote
 
 from .. import factories as f
 
@@ -1089,3 +1092,65 @@ def test_api_validator_assigned_to_when_create_tasks(client):
 
         response = client.json.post(url, json.dumps(data))
         assert response.status_code == 400, response.data
+
+
+def test_promote_task_to_us(client):
+    user_1 = f.UserFactory.create()
+    user_2 = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user_1)
+    f.MembershipFactory.create(project=project, user=user_1, is_admin=True)
+    f.MembershipFactory.create(project=project, user=user_2, is_admin=False)
+    task = f.TaskFactory.create(project=project, owner=user_1, assigned_to=user_2)
+    task.add_watcher(user_1)
+    task.add_watcher(user_2)
+    add_vote(task, user_1)
+    add_vote(task, user_2)
+
+    f.TaskAttachmentFactory(project=project, content_object=task, owner=user_1)
+
+    f.HistoryEntryFactory.create(
+        project=project,
+        user={"pk": user_1.id},
+        comment="Test comment",
+        key="tasks.task:{}".format(task.id),
+        is_hidden=False,
+        diff=[],
+    )
+
+    f.HistoryEntryFactory.create(
+        project=project,
+        user={"pk": user_2.id},
+        comment="Test comment 2",
+        key="tasks.task:{}".format(task.id),
+        is_hidden=False,
+        diff=[]
+    )
+
+    client.login(user_1)
+
+    url = reverse('tasks-promote-to-user-story', kwargs={"pk": task.pk})
+    data = {"project_id": project.id}
+    promote_response = client.json.post(url, json.dumps(data))
+
+    us_ref = promote_response.data.pop()
+    us = UserStory.objects.get(ref=us_ref)
+    us_response = client.get(reverse("userstories-detail", args=[us.pk]),
+                             {"include_attachments": True})
+
+    assert promote_response.status_code == 200, promote_response.data
+    assert us_response.data["subject"] == task.subject
+    assert us_response.data["description"] == task.description
+    assert us_response.data["owner"] == task.owner_id
+    assert us_response.data["generated_from_task"] == None
+    assert us_response.data["assigned_users"] == {user_2.id}
+    assert us_response.data["total_watchers"] == 2
+    assert us_response.data["total_attachments"] == 1
+    assert us_response.data["total_comments"] == 2
+    assert us_response.data["due_date"] == task.due_date
+    assert us_response.data["is_blocked"] == task.is_blocked
+    assert us_response.data["blocked_note"] == task.blocked_note
+    assert us_response.data["total_voters"] == 2
+
+    # check if task is deleted
+    assert us_response.data["from_task_ref"] == us.from_task_ref
+    assert not Task.objects.filter(pk=task.id).exists()

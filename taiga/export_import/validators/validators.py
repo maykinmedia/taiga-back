@@ -180,7 +180,7 @@ class BaseCustomAttributesValuesExportValidator(validators.ModelValidator):
         qs = self._custom_attribute_model.objects.filter(project=project_id,
                                                          id__in=values_ids)
         if qs.count() != len(values_ids):
-            raise ValidationError(_("It contain invalid custom fields."))
+            raise ValidationError(_("It contains invalid custom fields."))
 
         return attrs
 
@@ -291,9 +291,21 @@ class TaskExportValidator(WatcheableObjectModelValidatorMixin):
 class EpicRelatedUserStoryExportValidator(validators.ModelValidator):
     user_story = ProjectRelatedField(slug_field="ref")
     order = serializers.IntegerField()
+    source_project_slug = serializers.CharField(required=False)
+
+    def validate_source_project_slug(self, attrs, source):
+        if source in attrs and attrs[source] is not None and attrs[source] != "":
+            msg = _("An Epic has a related story from an external project (%(project)s) and cannot be imported") % {"project": attrs[source]}
+            raise ValidationError(msg)
+
+        attrs.pop(source, None)
+        return attrs
 
     class Meta:
         model = epics_models.RelatedUserStory
+        extra_kwargs = {
+            'source_project_slug': {'write_only': True},
+        }
         exclude = ('id', 'epic')
 
 
@@ -330,7 +342,7 @@ class UserStoryExportValidator(WatcheableObjectModelValidatorMixin):
 
     class Meta:
         model = userstories_models.UserStory
-        exclude = ('id', 'project', 'points', 'tasks')
+        exclude = ('id', 'project', 'points', 'tasks', 'from_task_ref')
 
     def custom_attributes_queryset(self, project):
         if project.id not in _custom_userstories_attributes_cache:

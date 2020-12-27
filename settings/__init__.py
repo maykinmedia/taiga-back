@@ -16,14 +16,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import absolute_import, print_function
 import os, sys
 
-from .celery import *
+from .celery import *  # noqa, pylint: disable=unused-wildcard-import
 
 try:
     print("Trying import local.py settings...", file=sys.stderr)
-    from .local import *
+    from .local import *  # noqa, pylint: disable=unused-wildcard-import
 except ImportError:
     print("Trying import development.py settings...", file=sys.stderr)
-    from .development import *
+    from .development import *  # noqa, pylint: disable=unused-wildcard-import

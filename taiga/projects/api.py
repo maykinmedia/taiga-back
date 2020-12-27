@@ -226,7 +226,7 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
 
     @list_route(methods=["POST"])
     def bulk_update_order(self, request, **kwargs):
-        if self.request.user.is_anonymous():
+        if self.request.user.is_anonymous:
             return response.Unauthorized()
 
         validator = validators.UpdateProjectOrderBulkValidator(data=request.DATA, many=True)
@@ -243,10 +243,10 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
         template_description = request.DATA.get('template_description', None)
 
         if not template_name:
-            raise response.BadRequest(_("Not valid template name"))
+            raise response.BadRequest(_("Invalid template name"))
 
         if not template_description:
-            raise response.BadRequest(_("Not valid template description"))
+            raise response.BadRequest(_("Invalid template description"))
 
         with advisory_lock("create-project-template"):
             template_slug = slugify_uniquely(template_name, models.ProjectTemplate)
@@ -419,7 +419,7 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
 
         # Check the user is a membership from the project
         if not project.memberships.filter(user=user).exists():
-            return response.BadRequest(_("The user must be already a project member"))
+            return response.BadRequest(_("The user must already be a project member"))
 
         reason = request.DATA.get('reason', None)
         services.start_project_transfer(project, user, reason)
@@ -659,7 +659,7 @@ class UserStoryDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
     def pre_delete(self, obj):
         if obj.by_default:
             raise exc.BadRequest(
-                _("You can't delete user story due date by default"))
+                _("You can't delete the default due date status of a user story"))
 
     @list_route(methods=["POST"])
     def create_default(self, request, **kwargs):
@@ -675,7 +675,7 @@ class UserStoryDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
         project = models.Project.objects.get(id=project_id)
 
         if project.us_duedates.all():
-            raise exc.BadRequest(_("Project already have due dates"))
+            raise exc.BadRequest(_("Project does already have due dates"))
 
         project_template = models.ProjectTemplate.objects.get(
             id=project.creation_template.id)
@@ -735,7 +735,7 @@ class TaskDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
     def pre_delete(self, obj):
         if obj.by_default:
             raise exc.BadRequest(
-                _("You can't delete task due date by default"))
+                _("You can't delete the default due date status of a task"))
 
     @list_route(methods=["POST"])
     def create_default(self, request, **kwargs):
@@ -751,7 +751,7 @@ class TaskDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
         project = models.Project.objects.get(id=project_id)
 
         if project.task_duedates.all():
-            raise exc.BadRequest(_("Project already have task due dates"))
+            raise exc.BadRequest(_("Project does already have task due dates"))
 
         project_template = models.ProjectTemplate.objects.get(
             id=project.creation_template.id)
@@ -875,7 +875,7 @@ class IssueDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
     def pre_delete(self, obj):
         if obj.by_default:
             raise exc.BadRequest(
-                _("You can't delete issue due date by default"))
+                _("You can't delete the default due date status of an issue"))
 
     @list_route(methods=["POST"])
     def create_default(self, request, **kwargs):
@@ -891,7 +891,7 @@ class IssueDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
         project = models.Project.objects.get(id=project_id)
 
         if project.issue_duedates.all():
-            raise exc.BadRequest(_("Project already have issue due dates"))
+            raise exc.BadRequest(_("Project does already have issue due dates"))
 
         project_template = models.ProjectTemplate.objects.get(
             id=project.creation_template.id)
@@ -989,6 +989,11 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
         if project.blocked_code is not None:
             raise exc.Blocked(_("Blocked element"))
 
+        if not request.user.verified_email:
+            return response.BadRequest({
+                "_error_message": _("To add members to a project, first you have to verify your email address")
+            })
+
         if "bulk_memberships" in data and isinstance(data["bulk_memberships"], list):
             total_new_memberships = len(data["bulk_memberships"])
             self._check_if_project_can_have_more_memberships(project, total_new_memberships)
@@ -1044,7 +1049,7 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
                 errors.append(membership.project.name)
 
         if len(errors) > 0:
-            error = _("This user can't be removed from the following projects, because would "
+            error = _("This user can't be removed from the following projects, because that would "
                       "leave them without any active admin: {}.".format(", ".join(errors)))
             return response.BadRequest(error)
 
