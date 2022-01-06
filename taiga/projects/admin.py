@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.contrib import admin
 from django.urls import reverse
@@ -76,10 +65,10 @@ class MembershipInline(admin.TabularInline):
 
 
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "slug", "is_private",
-                    "owner_url", "blocked_code", "is_featured"]
+    list_display = ["id", "name", "slug", "is_private","owner_url",
+                    "blocked_code", "is_featured", "created_date"]
     list_display_links = ["id", "name", "slug"]
-    list_filter = ("is_private", "blocked_code", "is_featured")
+    list_filter = ("is_private", "blocked_code", "is_featured", "created_date")
     list_editable = ["is_featured", "blocked_code"]
     search_fields = ["id", "name", "slug", "owner__username", "owner__email", "owner__full_name"]
     inlines = [RoleInline,
@@ -118,7 +107,7 @@ class ProjectAdmin(admin.ModelAdmin):
         }),
         (_("Default values"), {
             "classes": ("collapse",),
-            "fields": (("default_us_status", "default_points"),
+            "fields": (("default_us_status", "default_points", "default_swimlane"),
                        "default_task_status",
                        "default_issue_status",
                        ("default_priority", "default_severity", "default_issue_type")),
@@ -149,7 +138,7 @@ class ProjectAdmin(admin.ModelAdmin):
         return self.obj
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if (db_field.name in ["default_points", "default_us_status", "default_task_status",
+        if (db_field.name in ["default_points", "default_us_status", "default_swimlane", "default_task_status",
                               "default_priority", "default_severity",
                               "default_issue_status", "default_issue_type"]):
             if getattr(self, 'obj', None):
@@ -251,6 +240,24 @@ class UserStoryStatusAdmin(admin.ModelAdmin):
     raw_id_fields = ["project"]
 
 
+class EpicStatusAdmin(admin.ModelAdmin):
+    list_display = ["project", "order", "name", "is_closed"]
+    list_display_links = ["name"]
+    raw_id_fields = ["project"]
+
+
+class SwimlaneAdmin(admin.ModelAdmin):
+    list_display = ["project", "name", "order"]
+    list_display_links = ["project", "name"]
+    raw_id_fields = ["project"]
+    search_fields = ["project", "name"]
+
+
+class SwimlaneUserStoryStatusAdmin(admin.ModelAdmin):
+    list_display = ["project", "swimlane", "status", "wip_limit"]
+    list_display_links = ["swimlane", "status"]
+
+
 # Tasks common admins
 
 class TaskStatusAdmin(admin.ModelAdmin):
@@ -292,7 +299,10 @@ class ProjectTemplateAdmin(admin.ModelAdmin):
 admin.site.register(models.IssueStatus, IssueStatusAdmin)
 admin.site.register(models.TaskStatus, TaskStatusAdmin)
 admin.site.register(models.UserStoryStatus, UserStoryStatusAdmin)
+admin.site.register(models.EpicStatus, EpicStatusAdmin)
 admin.site.register(models.Points, PointsAdmin)
+admin.site.register(models.Swimlane, SwimlaneAdmin)
+admin.site.register(models.SwimlaneUserStoryStatus, SwimlaneUserStoryStatusAdmin)
 admin.site.register(models.Project, ProjectAdmin)
 admin.site.register(models.Membership, MembershipAdmin)
 admin.site.register(models.Severity, SeverityAdmin)

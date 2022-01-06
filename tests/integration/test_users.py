@@ -1,23 +1,12 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import pytest
+import datetime
 from tempfile import NamedTemporaryFile
 
 from django.conf import settings
@@ -34,7 +23,7 @@ from taiga.base.utils.thumbnails import get_thumbnail_url
 from taiga.base.utils.dicts import into_namedtuple
 from taiga.users import models
 from taiga.users.serializers import LikedObjectSerializer, VotedObjectSerializer
-from taiga.auth.tokens import get_token_for_user
+from taiga.auth.tokens import AccessToken, CancelToken
 from taiga.permissions.choices import MEMBERS_PERMISSIONS, ANON_PERMISSIONS
 from taiga.projects import choices as project_choices
 from taiga.users.services import get_watched_list, get_voted_list, get_liked_list
@@ -252,6 +241,24 @@ def test_validate_requested_email_change_with_invalid_token(client):
     assert response.status_code == 400
 
 
+def test_validate_requested_email_change_for_anonymous_user_and_reset_onpremise_newsletter_form_subscriptions(client):
+    user = f.UserFactory.create(email="old@email.com", email_token="change_email_token", new_email="new@email.com")
+    user.storage_entries.create(key="dont_ask_premise_newsletter", value=True)
+
+    assert user.storage_entries.count() == 1
+
+    url = reverse('users-change-email')
+    data = {"email_token": "change_email_token"}
+
+    response = client.post(url, json.dumps(data), content_type="application/json")
+
+    assert response.status_code == 204
+    user.refresh_from_db()
+    assert user.email_token is None
+    assert user.new_email is None
+    assert user.email == "new@email.com"
+    assert user.storage_entries.count() == 0
+
 ##############################
 ## Delete user
 ##############################
@@ -266,6 +273,22 @@ def test_delete_self_user(client):
     assert response.status_code == 204
     user = models.User.objects.get(pk=user.id)
     assert user.full_name == "Deleted user"
+
+
+def test_delete_self_user_with_date_cancelled(client):
+    user = f.UserFactory.create()
+    url = reverse('users-detail', kwargs={"pk": user.pk})
+
+    client.login(user)
+    response = client.delete(url)
+
+    assert response.status_code == 204
+    user = models.User.objects.get(pk=user.id)
+    assert user.full_name == "Deleted user"
+
+    date_cancelled = datetime.date(user.date_cancelled.year, user.date_cancelled.month, user.date_cancelled.day)
+    date_now = datetime.date.today()
+    assert date_cancelled == date_now
 
 
 def test_delete_self_user_blocking_projects(client):
@@ -295,6 +318,22 @@ def test_delete_self_user_remove_membership_projects(client):
     assert project.memberships.all().count() == 0
 
 
+def test_deleted_user_can_not_use_its_token(client):
+    user = f.UserFactory.create()
+    token = AccessToken.for_user(user)
+
+    headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
+    url = reverse('users-me')
+
+    response = client.get(url, **headers)
+    assert response.status_code == 200, response.data
+
+    user.cancel()
+
+    response = client.get(url, **headers)
+    assert response.status_code == 401, response.data
+
+
 ##############################
 ## Cancel account
 ##############################
@@ -302,8 +341,8 @@ def test_delete_self_user_remove_membership_projects(client):
 def test_cancel_self_user_with_valid_token(client):
     user = f.UserFactory.create()
     url = reverse('users-cancel')
-    cancel_token = get_token_for_user(user, "cancel_account")
-    data = {"cancel_token": cancel_token}
+    cancel_token = CancelToken.for_user(user)
+    data = {"cancel_token": str(cancel_token)}
     client.login(user)
     response = client.post(url, json.dumps(data), content_type="application/json")
 
@@ -312,14 +351,47 @@ def test_cancel_self_user_with_valid_token(client):
     assert user.full_name == "Deleted user"
 
 
-def test_cancel_self_user_with_invalid_token(client):
-    user = f.UserFactory.create()
+def test_cancel_self_user_with_valid_token_but_inactive(client):
+    user = f.UserFactory.create(is_active=False)
     url = reverse('users-cancel')
-    data = {"cancel_token": "invalid_cancel_token"}
+    cancel_token = CancelToken.for_user(user)
+    data = {"cancel_token": str(cancel_token)}
     client.login(user)
     response = client.post(url, json.dumps(data), content_type="application/json")
 
     assert response.status_code == 400
+
+def test_cancel_self_user_with_invalid_token(client):
+    user = f.UserFactory.create()
+    url = reverse('users-cancel')
+    data = {"cancel_token": str(CancelToken())}
+    client.login(user)
+    response = client.post(url, json.dumps(data), content_type="application/json")
+
+    assert response.status_code == 400
+
+    data = {"cancel_token": "__invalid_token__"}
+    client.login(user)
+    response = client.post(url, json.dumps(data), content_type="application/json")
+
+    assert response.status_code == 400
+
+
+def test_cancel_self_user_with_date_cancelled(client):
+    user = f.UserFactory.create()
+    cancel_token = CancelToken.for_user(user)
+    url = reverse('users-cancel')
+    data = {"cancel_token": str(cancel_token)}
+    client.login(user)
+    response = client.post(url, json.dumps(data), content_type="application/json")
+
+    assert response.status_code == 204
+    user = models.User.objects.get(pk=user.id)
+    assert user.full_name == "Deleted user"
+
+    date_cancelled = datetime.date(user.date_cancelled.year, user.date_cancelled.month, user.date_cancelled.day)
+    date_now = datetime.date.today()
+    assert date_cancelled == date_now
 
 
 ##############################

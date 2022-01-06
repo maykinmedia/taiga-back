@@ -1,20 +1,11 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
+
+from typing import List, Optional
 
 import csv
 import io
@@ -22,19 +13,29 @@ from collections import OrderedDict
 from operator import itemgetter
 from contextlib import closing
 
+from django.conf import settings
 from django.db import connection
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import ugettext as _
 
+from psycopg2.extras import execute_values
+
 from taiga.base.utils import db, text
+from taiga.celery import app
+from taiga.events import events
 from taiga.projects.history.services import take_snapshot
+from taiga.projects.models import Project, UserStoryStatus, Swimlane
+from taiga.projects.milestones.models import Milestone
+from taiga.projects.notifications.utils import attach_watchers_to_queryset
 from taiga.projects.services import apply_order_updates
+from taiga.projects.tasks.models import Task
 from taiga.projects.userstories.apps import connect_userstories_signals
 from taiga.projects.userstories.apps import disconnect_userstories_signals
-from taiga.events import events
-from taiga.projects.tasks.models import Task
 from taiga.projects.votes.utils import attach_total_voters_to_queryset
-from taiga.projects.notifications.utils import attach_watchers_to_queryset
+from taiga.users.models import User
+from taiga.users.gravatar import get_gravatar_id
+from taiga.users.services import get_big_photo_url, get_photo_url
 
 from . import models
 
@@ -110,6 +111,265 @@ def update_userstories_order_in_bulk(bulk_data: list, field: str,
     return us_orders
 
 
+def reset_userstories_kanban_order_in_bulk(project: Project,
+                                           bulk_userstories: List[int]):
+    """
+    Reset the order of the userstories specified adding the extra updates
+    needed to keep consistency.
+
+     - `bulk_userstories` should be a list of user stories IDs
+    """
+    base_order = models.UserStory.NEW_KANBAN_ORDER()
+    data = ((id, base_order + index) for index, id in enumerate(bulk_userstories))
+
+    sql = """
+    UPDATE userstories_userstory
+       SET kanban_order = tmp.new_kanban_order::BIGINT
+      FROM (VALUES %s) AS tmp (id, new_kanban_order)
+     WHERE tmp.id = userstories_userstory.id
+    """
+    with connection.cursor() as cursor:
+        execute_values(cursor, sql, data)
+
+    ## Sent events of updated stories
+    events.emit_event_for_ids(ids=bulk_userstories,
+                              content_type="userstories.userstory",
+                              projectid=project.id)
+
+
+def update_userstories_backlog_or_sprint_order_in_bulk(user: User,
+                                                       project: Project,
+                                                       bulk_userstories: List[int],
+                                                       before_userstory: Optional[models.UserStory] = None,
+                                                       after_userstory: Optional[models.UserStory] = None,
+                                                       milestone: Optional[Milestone] = None):
+    """
+    Updates the order of the userstories specified adding the extra updates
+    needed to keep consistency.
+
+    Note: `after_userstory_id` and `before_userstory_id` are mutually exclusive;
+          you can use only one at a given request. They can be both None which
+          means "at the beginning of is cell"
+
+     - `bulk_userstories` should be a list of user stories IDs
+    """
+    # Get ids from milestones affected
+    milestones_ids = set(project.milestones.filter(user_stories__in=bulk_userstories).values_list('id', flat=True))
+    if milestone:
+        milestones_ids.add(milestone.id)
+
+    order_param = "backlog_order"
+
+    # filter user stories from milestone
+    user_stories = project.user_stories.all()
+    if milestone is not None:
+         user_stories = user_stories.filter(milestone=milestone)
+         order_param = "sprint_order"
+    else:
+         user_stories = user_stories.filter(milestone__isnull=True)
+
+    # exclude moved user stories
+    user_stories = user_stories.exclude(id__in=bulk_userstories)
+
+    # if before_userstory, get it and all elements before too:
+    if before_userstory:
+        user_stories = (user_stories.filter(**{f"{order_param}__gte": getattr(before_userstory, order_param)}))
+    # if after_userstory, exclude it and get only elements after it:
+    elif after_userstory:
+        user_stories = (user_stories.exclude(id=after_userstory.id)
+                                    .filter(**{f"{order_param}__gte": getattr(after_userstory, order_param)}))
+
+    # sort and get only ids
+    user_story_ids = (user_stories.order_by(order_param, "id")
+                                  .values_list('id', flat=True))
+
+    # append moved user stories
+    user_story_ids = bulk_userstories + list(user_story_ids)
+
+    # calculate the start order
+    if before_userstory:
+        # order start with the before_userstory order
+        start_order = getattr(before_userstory, order_param)
+    elif after_userstory:
+        # order start after the after_userstory order
+        start_order = getattr(after_userstory, order_param) + 1
+    else:
+        # move at the beggining of the column if there is no after and before
+        start_order = 1
+
+    # prepare rest of data
+    total_user_stories = len(user_story_ids)
+    user_story_orders = range(start_order, start_order + total_user_stories)
+
+    data = tuple(zip(user_story_ids,
+                     user_story_orders))
+
+    # execute query for update milestone and backlog or sprint order
+    sql = f"""
+    UPDATE userstories_userstory
+       SET {order_param} = tmp.new_order::BIGINT
+      FROM (VALUES %s) AS tmp (id, new_order)
+     WHERE tmp.id = userstories_userstory.id
+    """
+    with connection.cursor() as cursor:
+        execute_values(cursor, sql, data)
+
+    # execute query for update milestone for user stories and its tasks
+    bulk_userstories_objects = project.user_stories.filter(id__in=bulk_userstories)
+    bulk_userstories_objects.update(milestone=milestone)
+    project.tasks.filter(user_story__in=bulk_userstories).update(milestone=milestone)
+
+    # Generate snapshots for user stories and tasks and calculate if aafected milestones
+    # are cosed or open now.
+    if settings.CELERY_ENABLED:
+        _async_tasks_after_backlog_or_sprint_order_change.delay(bulk_userstories, milestones_ids, user.id)
+    else:
+        _async_tasks_after_backlog_or_sprint_order_change(bulk_userstories, milestones_ids, user.id)
+
+    # Sent events of updated stories
+    events.emit_event_for_ids(ids=user_story_ids,
+                              content_type="userstories.userstory",
+                              projectid=project.pk)
+
+    # Generate response with modified info
+    res = ({
+        "id": id,
+        "milestone": milestone.id if milestone else None,
+        order_param: order
+    } for (id, order) in data)
+    return res
+
+
+@app.task
+def _async_tasks_after_backlog_or_sprint_order_change(userstories_ids, milestones_ids, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        user = None
+
+    # Take snapshots for user stories and their taks
+    for userstory in  models.UserStory.objects.filter(id__in=userstories_ids):
+        take_snapshot(userstory, user=user)
+
+        for task in userstory.tasks.all():
+            take_snapshot(task, user=user)
+
+    # Check if milestones are open or closed after stories are moved
+    for milestone in  Milestone.objects.filter(id__in=milestones_ids):
+        _recalculate_is_closed_for_milestone(milestone)
+
+
+
+def update_userstories_kanban_order_in_bulk(user: User,
+                                            project: Project,
+                                            status: UserStoryStatus,
+                                            bulk_userstories: List[int],
+                                            before_userstory: Optional[models.UserStory] = None,
+                                            after_userstory: Optional[models.UserStory] = None,
+                                            swimlane: Optional[Swimlane] = None):
+    """
+    Updates the order of the userstories specified adding the extra updates
+    needed to keep consistency.
+
+    Note: `after_userstory_id` and `before_userstory_id` are mutually exclusive;
+          you can use only one at a given request. They can be both None which
+          means "at the beginning of is cell"
+
+     - `bulk_userstories` should be a list of user stories IDs
+    """
+
+
+    # filter user stories from status and swimlane
+    user_stories = project.user_stories.filter(status=status)
+    if swimlane is not None:
+         user_stories = user_stories.filter(swimlane=swimlane)
+    else:
+         user_stories = user_stories.filter(swimlane__isnull=True)
+
+    # exclude moved user stories
+    user_stories = user_stories.exclude(id__in=bulk_userstories)
+
+    # if before_userstory, get it and all elements before too:
+    if before_userstory:
+        user_stories = (user_stories.filter(kanban_order__gte=before_userstory.kanban_order))
+    # if after_userstory, exclude it and get only elements after it:
+    elif after_userstory:
+        user_stories = (user_stories.exclude(id=after_userstory.id)
+                                    .filter(kanban_order__gte=after_userstory.kanban_order))
+
+    # sort and get only ids
+    user_story_ids = (user_stories.order_by("kanban_order", "id")
+                                  .values_list('id', flat=True))
+
+    # append moved user stories
+    user_story_ids = bulk_userstories + list(user_story_ids)
+
+    # calculate the start order
+    if before_userstory:
+        # order start with the before_userstory order
+        start_order = before_userstory.kanban_order
+    elif after_userstory:
+        # order start after the after_userstory order
+        start_order = after_userstory.kanban_order + 1
+    else:
+        # move at the beggining of the column if there is no after and before
+        start_order = 1
+
+    # prepare rest of data
+    total_user_stories = len(user_story_ids)
+    user_story_kanban_orders = range(start_order, start_order + total_user_stories)
+
+    data = tuple(zip(user_story_ids,
+                     user_story_kanban_orders))
+
+    # execute query for update kanban_order
+    sql = """
+    UPDATE userstories_userstory
+       SET kanban_order = tmp.new_kanban_order::BIGINT
+      FROM (VALUES %s) AS tmp (id, new_kanban_order)
+     WHERE tmp.id = userstories_userstory.id
+    """
+    with connection.cursor() as cursor:
+        execute_values(cursor, sql, data)
+
+    # execute query for update status, swimlane and kanban_order
+    bulk_userstories_objects = project.user_stories.filter(id__in=bulk_userstories)
+    bulk_userstories_objects.update(status=status, swimlane=swimlane)
+
+    # Update is_closed attr for user stories and related milestones
+    if settings.CELERY_ENABLED:
+        _async_tasks_after_kanban_order_change.delay(bulk_userstories, user.id)
+    else:
+        _async_tasks_after_kanban_order_change(bulk_userstories, user.id)
+
+    # Sent events of updated stories
+    events.emit_event_for_ids(ids=user_story_ids,
+                              content_type="userstories.userstory",
+                              projectid=project.pk)
+
+    # Generate response with modified info
+    res = ({
+        "id": id,
+        "swimlane": swimlane.id if swimlane else None,
+        "status": status.id,
+        "kanban_order": kanban_order
+    } for (id, kanban_order) in data)
+    return res
+
+
+@app.task
+def _async_tasks_after_kanban_order_change(userstories_ids, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        user = None
+
+    for userstory in  models.UserStory.objects.filter(id__in=userstories_ids):
+        recalculate_is_closed_for_userstory_and_its_milestone(userstory)
+        # Generate the history entity
+        take_snapshot(userstory, user=user)
+
+
 def update_userstories_milestone_in_bulk(bulk_data: list, milestone: object):
     """
     Update the milestone and the milestone order of some user stories adding
@@ -179,6 +439,8 @@ def close_userstory(us):
         us.is_closed = True
         us.finish_date = timezone.now()
         us.save(update_fields=["is_closed", "finish_date"])
+        return True
+    return False
 
 
 def open_userstory(us):
@@ -186,7 +448,44 @@ def open_userstory(us):
         us.is_closed = False
         us.finish_date = None
         us.save(update_fields=["is_closed", "finish_date"])
+        return True
+    return False
 
+
+
+def recalculate_is_closed_for_userstory_and_its_milestone(userstory):
+    """
+    Check and update the open or closed condition for the userstory and its milestone.
+
+    NOTE: [1] This method is useful if the userstory update operation has been done without
+              using the ORM (pre_save/post_save model signals).
+          [2] Do not use it if the milestone has been previously updated.
+    """
+    has_changed = False
+    # Update is_close attr for the user story
+    if calculate_userstory_is_closed(userstory):
+        has_changed = close_userstory(userstory)
+    else:
+        has_changed = open_userstory(userstory)
+
+    if has_changed and userstory.milestone_id:
+        _recalculate_is_closed_for_milestone(userstory.milestone)
+
+
+def _recalculate_is_closed_for_milestone(milestone):
+    """
+    Check and update the open or closed condition for the milestone.
+
+    NOTE: [1] This method is useful if the userstory update operation has been done without
+              using the ORM (pre_save/post_save model signals).
+    """
+    from taiga.projects.milestones import services as milestone_service
+
+    # Update is_close attr for the milestone
+    if milestone_service.calculate_milestone_is_closed(milestone):
+        milestone_service.close_milestone(milestone)
+    else:
+        milestone_service.open_milestone(milestone)
 
 #####################################################
 # CSV
@@ -198,7 +497,7 @@ def userstories_to_csv(project, queryset):
                   "sprint_estimated_start", "sprint_estimated_finish", "owner",
                   "owner_full_name", "assigned_to", "assigned_to_full_name",
                   "assigned_users", "assigned_users_full_name", "status",
-                  "is_closed"]
+                  "is_closed", "swimlane"]
 
     roles = project.roles.filter(computable=True).order_by('slug')
     for role in roles:
@@ -261,6 +560,7 @@ def userstories_to_csv(project, queryset):
                  us.assigned_users.all()]),
             "status": us.status.name if us.status else None,
             "is_closed": us.is_closed,
+            "swimlane": us.swimlane.name if us.swimlane else None,
             "backlog_order": us.backlog_order,
             "sprint_order": us.sprint_order,
             "kanban_order": us.kanban_order,
@@ -482,7 +782,9 @@ def _get_userstories_assigned_users(project, queryset):
                  SELECT "projects_membership"."user_id" "user_id",
                         "users_user"."full_name" "full_name",
                         "users_user"."username" "username",
-                        COALESCE("counters".count, 0) "count"
+                        COALESCE("counters".count, 0) "count",
+                        "users_user"."photo" "photo",
+                        "users_user"."email" "email"
                    FROM "projects_membership"
         LEFT OUTER JOIN "counters"
                      ON ("projects_membership"."user_id" = "counters"."assigned_user_id")
@@ -496,7 +798,9 @@ def _get_userstories_assigned_users(project, queryset):
                  SELECT NULL "user_id",
                         NULL "full_name",
                         NULL "username",
-                        count(coalesce("assigned_to_id", -1)) "count"
+                        count(coalesce("assigned_to_id", -1)) "count",
+                        NULL "photo",
+                        NULL "email"
                    FROM "userstories_userstory"
              INNER JOIN "projects_project"
                      ON ("userstories_userstory"."project_id" = "projects_project"."id")
@@ -517,11 +821,14 @@ def _get_userstories_assigned_users(project, queryset):
 
     result = []
     none_valued_added = False
-    for id, full_name, username, count in rows:
+    for id, full_name, username, count, photo, email in rows:
         result.append({
             "id": id,
             "full_name": full_name or username or "",
             "count": count,
+            "photo": get_photo_url(photo),
+            "big_photo": get_big_photo_url(photo),
+            "gravatar_id": get_gravatar_id(email) if email else None
         })
 
         if id is None:
@@ -533,6 +840,9 @@ def _get_userstories_assigned_users(project, queryset):
             "id": None,
             "full_name": "",
             "count": 0,
+            "photo": None,
+            "big_photo": None,
+            "gravatar_id": None
         })
 
     return sorted(result, key=itemgetter("full_name"))
@@ -570,7 +880,9 @@ def _get_userstories_owners(project, queryset):
                  SELECT "projects_membership"."user_id" "user_id",
                         "users_user"."full_name",
                         "users_user"."username",
-                        COALESCE("counters".count, 0) "count"
+                        COALESCE("counters".count, 0) "count",
+                        "users_user"."photo" "photo",
+                        "users_user"."email" "email"
                    FROM "projects_membership"
         LEFT OUTER JOIN "counters"
                      ON ("projects_membership"."user_id" = "counters"."owner_id")
@@ -584,7 +896,9 @@ def _get_userstories_owners(project, queryset):
                  SELECT "users_user"."id" "user_id",
                         "users_user"."full_name" "full_name",
                         "users_user"."username" "username",
-                        COALESCE("counters"."count", 0) "count"
+                        COALESCE("counters"."count", 0) "count",
+                        NULL "photo",
+                        NULL "email"
                    FROM "users_user"
         LEFT OUTER JOIN "counters"
                      ON ("users_user"."id" = "counters"."owner_id")
@@ -596,12 +910,15 @@ def _get_userstories_owners(project, queryset):
         rows = cursor.fetchall()
 
     result = []
-    for id, full_name, username, count in rows:
+    for id, full_name, username, count, photo, email in rows:
         if count > 0:
             result.append({
                 "id": id,
                 "full_name": full_name or username or "",
                 "count": count,
+                "photo": get_photo_url(photo),
+                "big_photo": get_big_photo_url(photo),
+                "gravatar_id": get_gravatar_id(email) if email else None
             })
     return sorted(result, key=itemgetter("full_name"))
 

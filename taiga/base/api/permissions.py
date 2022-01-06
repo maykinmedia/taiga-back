@@ -1,22 +1,12 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
-import abc, inspect
+import abc
+import inspect
 
 from functools import reduce
 
@@ -34,7 +24,7 @@ class ResourcePermission(object):
     Base class for define resource permissions.
     """
 
-    enought_perms = None
+    enough_perms = None
     global_perms = None
     retrieve_perms = None
     create_perms = None
@@ -66,8 +56,8 @@ class ResourcePermission(object):
         if self.global_perms:
             permset = (self.global_perms & permset)
 
-        if self.enought_perms:
-            permset = (self.enought_perms | permset)
+        if self.enough_perms:
+            permset = (self.enough_perms | permset)
 
         return permset.check_permissions(request=self.request,
                                          view=self.view,
@@ -197,12 +187,12 @@ class IsObjectOwner(PermissionComponent):
 ######################################################################
 
 class AllowAnyPermission(ResourcePermission):
-    enought_perms = AllowAny()
+    enough_perms = AllowAny()
 
 
 class IsAuthenticatedPermission(ResourcePermission):
-    enought_perms = IsAuthenticated()
+    enough_perms = IsAuthenticated()
 
 
 class TaigaResourcePermission(ResourcePermission):
-    enought_perms = IsSuperUser()
+    enough_perms = IsSuperUser()

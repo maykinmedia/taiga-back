@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import uuid
 
@@ -24,16 +13,18 @@ from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.conf import settings
 
+from taiga.auth.exceptions import TokenError
+from taiga.auth.tokens import CancelToken
+from taiga.auth.settings import api_settings as auth_settings
 from taiga.base import exceptions as exc
 from taiga.base import filters
 from taiga.base import response
 from taiga.base.utils.dicts import into_namedtuple
-from taiga.auth.tokens import get_user_for_token
 from taiga.base.decorators import list_route
 from taiga.base.decorators import detail_route
-from taiga.base.api import ModelCrudViewSet
-from taiga.base.api.mixins import BlockedByProjectMixin
 from taiga.base.api.fields import validate_user_email_allowed_domains
+from taiga.base.api.mixins import BlockedByProjectMixin
+from taiga.base.api.viewsets import ModelCrudViewSet
 from taiga.base.api.utils import get_object_or_404
 from taiga.base.filters import MembersFilterBackend
 from taiga.base.mails import mail_builder
@@ -178,7 +169,7 @@ class UsersViewSet(ModelCrudViewSet):
         email = mail_builder.password_recovery(user, {"user": user})
         email.send()
 
-        return response.Ok({"detail": _("Mail sended successful!")})
+        return response.Ok({"detail": _("Mail sent successfully!")})
 
     @list_route(methods=["POST"])
     def change_password_from_recovery(self, request, pk=None):
@@ -190,7 +181,7 @@ class UsersViewSet(ModelCrudViewSet):
 
         validator = validators.RecoveryValidator(data=request.DATA, many=False)
         if not validator.is_valid():
-            raise exc.WrongArguments(_("Token is invalid"))
+            return response.BadRequest(validator.errors)
 
         try:
             user = models.User.objects.get(token=validator.data["token"])
@@ -213,7 +204,7 @@ class UsersViewSet(ModelCrudViewSet):
         current_password = request.DATA.get("current_password")
         password = request.DATA.get("password")
 
-        # NOTE: GitHub users have no password yet (request.user.passwor == '') so
+        # NOTE: GitHub users have no password yet (request.user.password == '') so
         #       current_password can be None
         if not current_password and request.user.password:
             raise exc.WrongArguments(_("Current password parameter needed"))
@@ -222,7 +213,7 @@ class UsersViewSet(ModelCrudViewSet):
             raise exc.WrongArguments(_("New password parameter needed"))
 
         if len(password) < 6:
-            raise exc.WrongArguments(_("Invalid password length at least 6 charaters needed"))
+            raise exc.WrongArguments(_("Invalid password length at least 6 characters needed"))
 
         if current_password and not request.user.check_password(current_password):
             raise exc.WrongArguments(_("Invalid current password"))
@@ -272,8 +263,7 @@ class UsersViewSet(ModelCrudViewSet):
         """
         validator = validators.ChangeEmailValidator(data=request.DATA, many=False)
         if not validator.is_valid():
-            raise exc.WrongArguments(_("Invalid, are you sure the token is correct and you "
-                                       "didn't use it before?"))
+            return response.BadRequest(validator.errors)
 
         try:
             user = models.User.objects.get(email_token=validator.data["email_token"])
@@ -297,6 +287,10 @@ class UsersViewSet(ModelCrudViewSet):
                                       old_email=old_email,
                                       new_email=new_email)
 
+        # If the user changes their email, the application will ask again if they
+        # want to subscribe to the Taiga newsletter.
+        user.storage_entries.filter(key="dont_ask_premise_newsletter").delete()
+
         return response.NoContent()
 
     @list_route(methods=["GET"])
@@ -318,11 +312,10 @@ class UsersViewSet(ModelCrudViewSet):
             raise exc.WrongArguments(_("Invalid, are you sure the token is correct?"))
 
         try:
-            max_age_cancel_account = getattr(settings, "MAX_AGE_CANCEL_ACCOUNT", None)
-            user = get_user_for_token(validator.data["cancel_token"], "cancel_account",
-                                      max_age=max_age_cancel_account)
-
-        except exc.NotAuthenticated:
+            validated_token = CancelToken(token=validator.data["cancel_token"])
+            user_id_value = validated_token[auth_settings.USER_ID_CLAIM]
+            user = models.User.objects.get(**{auth_settings.USER_ID_FIELD: user_id_value})
+        except (exc.NotAuthenticated, models.User.DoesNotExist, TokenError, KeyError):
             raise exc.WrongArguments(_("Invalid, are you sure the token is correct?"))
 
         if not user.is_active:

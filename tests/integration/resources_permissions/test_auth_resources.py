@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.urls import reverse
 
@@ -51,7 +39,31 @@ def test_auth_create(client):
     assert result.status_code == 200
 
 
-def test_auth_action_register(client, settings):
+def test_auth_refresh(client):
+    url = reverse('auth-list')
+
+    user = f.UserFactory.create()
+
+    login_data = json.dumps({
+        "type": "normal",
+        "username": user.username,
+        "password": user.username,
+    })
+
+    result = client.post(url, login_data, content_type="application/json")
+    assert result.status_code == 200
+
+    url = reverse('auth-refresh')
+
+    refresh_data = json.dumps({
+        "refresh": result.data["refresh"],
+    })
+
+    result = client.post(url, refresh_data, content_type="application/json")
+    assert result.status_code == 200
+
+
+def test_auth_action_register_with_short_password(client, settings):
     settings.PUBLIC_REGISTER_ENABLED = True
     url = reverse('auth-register')
 
@@ -65,4 +77,21 @@ def test_auth_action_register(client, settings):
     })
 
     result = client.post(url, register_data, content_type="application/json")
-    assert result.status_code == 201
+    assert result.status_code == 400, result.json()
+
+
+def test_auth_action_register(client, settings):
+    settings.PUBLIC_REGISTER_ENABLED = True
+    url = reverse('auth-register')
+
+    register_data = json.dumps({
+        "type": "public",
+        "username": "test",
+        "password": "test123",
+        "full_name": "test123",
+        "email": "test@test.com",
+        "accepted_terms": True,
+    })
+
+    result = client.post(url, register_data, content_type="application/json")
+    assert result.status_code == 201, result.json()

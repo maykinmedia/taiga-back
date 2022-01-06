@@ -1,22 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 def attach_members(queryset, as_field="members_attr"):
     """Attach a json members representation to each object of the queryset.
@@ -137,6 +124,29 @@ def attach_epic_statuses(queryset, as_field="epic_statuses_attr"):
                     )
                FROM projects_epicstatus
               WHERE projects_epicstatus.project_id = {tbl}.id
+          """
+
+    sql = sql.format(tbl=model._meta.db_table)
+    queryset = queryset.extra(select={as_field: sql})
+    return queryset
+
+
+def attach_swimlanes(queryset, as_field="swimlanes_attr"):
+    """Attach a json swimlanes representation to each object of the queryset.
+
+    :param queryset: A Django projects queryset object.
+    :param as_field: Attach the swimalne as an attribute with this name.
+
+    :return: Queryset object with the additional `as_field` field.
+    """
+    model = queryset.model
+    sql = """
+             SELECT json_agg(
+                        row_to_json(projects_swimlane)
+                        ORDER BY projects_swimlane.order
+                    )
+               FROM projects_swimlane
+              WHERE projects_swimlane.project_id = {tbl}.id
           """
 
     sql = sql.format(tbl=model._meta.db_table)
@@ -543,56 +553,6 @@ def attach_my_role_permissions(queryset, user, as_field="my_role_permissions_att
     return queryset
 
 
-def attach_private_projects_same_owner(queryset, user, as_field="private_projects_same_owner_attr"):
-    """Attach a private projects counter to each object of the queryset.
-
-    :param queryset: A Django projects queryset object.
-    :param as_field: Attach the counter as an attribute with this name.
-
-    :return: Queryset object with the additional `as_field` field.
-    """
-    model = queryset.model
-    if user is None or user.is_anonymous:
-        sql = "SELECT 0"
-    else:
-        sql = """
-                 SELECT COUNT(id)
-                   FROM projects_project p_aux
-                  WHERE p_aux.is_private = True AND
-                        p_aux.owner_id = {tbl}.owner_id
-              """
-
-        sql = sql.format(tbl=model._meta.db_table, user_id=user.id)
-
-    queryset = queryset.extra(select={as_field: sql})
-    return queryset
-
-
-def attach_public_projects_same_owner(queryset, user, as_field="public_projects_same_owner_attr"):
-    """Attach a public projects counter to each object of the queryset.
-
-    :param queryset: A Django projects queryset object.
-    :param as_field: Attach the counter as an attribute with this name.
-
-    :return: Queryset object with the additional `as_field` field.
-    """
-    model = queryset.model
-    if user is None or user.is_anonymous:
-        sql = "SELECT 0"
-    else:
-        sql = """
-                 SELECT COUNT(id)
-                   FROM projects_project p_aux
-                  WHERE p_aux.is_private = False AND
-                        p_aux.owner_id = {tbl}.owner_id
-              """
-
-        sql = sql.format(tbl=model._meta.db_table, user_id=user.id)
-
-    queryset = queryset.extra(select={as_field: sql})
-    return queryset
-
-
 def attach_my_homepage(queryset, user, as_field="my_homepage_attr"):
     """Attach a homepage array to each object of the queryset.
 
@@ -622,6 +582,7 @@ def attach_extra_info(queryset, user=None):
     queryset = attach_closed_milestones(queryset)
     queryset = attach_notify_policies(queryset)
     queryset = attach_epic_statuses(queryset)
+    queryset = attach_swimlanes(queryset)
     queryset = attach_userstory_statuses(queryset)
     queryset = attach_userstory_duedates(queryset)
     queryset = attach_points(queryset)
@@ -639,8 +600,6 @@ def attach_extra_info(queryset, user=None):
     queryset = attach_roles(queryset)
     queryset = attach_is_fan(queryset, user)
     queryset = attach_my_role_permissions(queryset, user)
-    queryset = attach_private_projects_same_owner(queryset, user)
-    queryset = attach_public_projects_same_owner(queryset, user)
     queryset = attach_milestones(queryset)
     queryset = attach_my_homepage(queryset, user)
 
@@ -659,8 +618,6 @@ def attach_basic_info(queryset, user=None):
     queryset = attach_notify_policies(queryset)
     queryset = attach_is_fan(queryset, user)
     queryset = attach_my_role_permissions(queryset, user)
-    queryset = attach_private_projects_same_owner(queryset, user)
-    queryset = attach_public_projects_same_owner(queryset, user)
     queryset = attach_my_homepage(queryset, user)
 
     return queryset

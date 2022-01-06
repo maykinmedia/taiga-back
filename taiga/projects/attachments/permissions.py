@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from taiga.base.api.permissions import (TaigaResourcePermission, HasProjectPerm,
                                         AllowAny, PermissionComponent)
@@ -39,6 +27,7 @@ class EpicAttachmentPermission(TaigaResourcePermission):
     create_perms = HasProjectPerm('modify_epic') | (CommentAttachmentPerm() & HasProjectPerm('comment_epic'))
     update_perms = HasProjectPerm('modify_epic') | IsAttachmentOwnerPerm()
     partial_update_perms = HasProjectPerm('modify_epic') | IsAttachmentOwnerPerm()
+    bulk_update_order_perms = HasProjectPerm('modify_epic') | IsAttachmentOwnerPerm()
     destroy_perms = HasProjectPerm('modify_epic') | IsAttachmentOwnerPerm()
     list_perms = AllowAny()
 
@@ -48,6 +37,7 @@ class UserStoryAttachmentPermission(TaigaResourcePermission):
     create_perms = HasProjectPerm('modify_us') | (CommentAttachmentPerm() & HasProjectPerm('comment_us'))
     update_perms = HasProjectPerm('modify_us') | IsAttachmentOwnerPerm()
     partial_update_perms = HasProjectPerm('modify_us') | IsAttachmentOwnerPerm()
+    bulk_update_order_perms = HasProjectPerm('modify_us') | IsAttachmentOwnerPerm()
     destroy_perms = HasProjectPerm('modify_us') | IsAttachmentOwnerPerm()
     list_perms = AllowAny()
 
@@ -57,6 +47,7 @@ class TaskAttachmentPermission(TaigaResourcePermission):
     create_perms = HasProjectPerm('modify_task') | (CommentAttachmentPerm() & HasProjectPerm('comment_task'))
     update_perms = HasProjectPerm('modify_task') | IsAttachmentOwnerPerm()
     partial_update_perms = HasProjectPerm('modify_task') | IsAttachmentOwnerPerm()
+    bulk_update_order_perms = HasProjectPerm('modify_task') | IsAttachmentOwnerPerm()
     destroy_perms = HasProjectPerm('modify_task') | IsAttachmentOwnerPerm()
     list_perms = AllowAny()
 
@@ -66,6 +57,7 @@ class IssueAttachmentPermission(TaigaResourcePermission):
     create_perms = HasProjectPerm('modify_issue') | (CommentAttachmentPerm() & HasProjectPerm('comment_issue'))
     update_perms = HasProjectPerm('modify_issue') | IsAttachmentOwnerPerm()
     partial_update_perms = HasProjectPerm('modify_issue') | IsAttachmentOwnerPerm()
+    bulk_update_order_perms = HasProjectPerm('modify_issue') | IsAttachmentOwnerPerm()
     destroy_perms = HasProjectPerm('modify_issue') | IsAttachmentOwnerPerm()
     list_perms = AllowAny()
 
@@ -75,6 +67,7 @@ class WikiAttachmentPermission(TaigaResourcePermission):
     create_perms = HasProjectPerm('modify_wiki_page') | (CommentAttachmentPerm() & HasProjectPerm('comment_wiki_page'))
     update_perms = HasProjectPerm('modify_wiki_page') | IsAttachmentOwnerPerm()
     partial_update_perms = HasProjectPerm('modify_wiki_page') | IsAttachmentOwnerPerm()
+    bulk_update_order_perms = HasProjectPerm('modify_wiki_page') | IsAttachmentOwnerPerm()
     destroy_perms = HasProjectPerm('modify_wiki_page') | IsAttachmentOwnerPerm()
     list_perms = AllowAny()
 

@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import os.path as path
 import mimetypes
@@ -25,15 +14,18 @@ from django.contrib.contenttypes.models import ContentType
 
 from taiga.base import filters
 from taiga.base import exceptions as exc
+from taiga.base import response
 from taiga.base.api import ModelCrudViewSet
 from taiga.base.api.mixins import BlockedByProjectMixin
-from taiga.base.api.utils import get_object_or_404
+from taiga.base.api.utils import get_object_or_404, get_object_or_error
+from taiga.base.decorators import list_route
 
 from taiga.projects.notifications.mixins import WatchedResourceMixin
 from taiga.projects.history.mixins import HistoryResourceMixin
 
 from . import permissions
 from . import serializers
+from . import services
 from . import validators
 from . import models
 
@@ -81,6 +73,34 @@ class BaseAttachmentViewSet(HistoryResourceMixin, WatchedResourceMixin,
 
     def get_object_for_snapshot(self, obj):
         return obj.content_object
+
+    @list_route(methods=["POST"])
+    def bulk_update_order(self, request, **kwargs):
+        contenttype = self.get_content_type()
+        # Validate data
+        data = request.DATA.copy()
+        data["content_type_id"] = contenttype.id
+
+        validator = validators.UpdateAttachmentsOrderBulkValidator(data=data)
+        if not validator.is_valid():
+            return response.BadRequest(validator.errors)
+
+        # Get and validate permissions
+        item = contenttype.get_object_for_this_type(pk=data["object_id"])
+        self.check_permissions(request, "bulk_update_order", item.project)
+        if item.project.blocked_code is not None:
+            raise exc.Blocked(_("Blocked element"))
+
+        # Get after_attachment
+        after_attachment = None
+        after_attachment_id = data.get("after_attachment_id", None)
+        if after_attachment_id is not None:
+            after_attachment = get_object_or_error(item.attachments, request.user, pk=after_attachment_id)
+
+        ret = services.update_order_in_bulk(item=item,
+                                            after_attachment=after_attachment,
+                                            bulk_attachments=data["bulk_attachments"])
+        return response.Ok(ret)
 
 
 class EpicAttachmentViewSet(BaseAttachmentViewSet):

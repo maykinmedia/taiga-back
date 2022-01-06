@@ -1,27 +1,18 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
+from django.db.models.expressions import RawSQL
 from django.db.models import Q
 from django.db.models.query import QuerySet
+from django.db import connection
 
 from functools import partial, wraps
 
@@ -153,7 +144,7 @@ def get_timeline(obj, namespace=None):
     return timeline
 
 
-def filter_timeline_for_user(timeline, user):
+def filter_timeline_for_user(timeline, user, namespace=None):
     # Superusers can see everything
     if user.is_superuser:
         return timeline
@@ -197,7 +188,43 @@ def filter_timeline_for_user(timeline, user):
                 tl_filter |= Q(project=membership.project, data_content_type__in=data_content_types)
 
     timeline = timeline.filter(tl_filter)
+
+    if namespace:
+        timeline = timeline.exclude(id__in=_get_not_allowed_epic_related_query(user, namespace))
+
     return timeline
+
+
+def _get_not_allowed_epic_related_query(accessing_user, namespace):
+    sql = """
+    select tt.id
+    from timeline_timeline tt
+    inner join projects_project pp
+    -- project of the epic's related user story
+    on cast (data -> 'userstory' -> 'project' ->> 'id' as INTEGER) = pp.id
+    where 
+       not (
+            -- Allowed for anonymous users
+            'view_us' = ANY(pp.anon_permissions)
+            or
+            -- Allowed for registered users
+            ('view_us' = ANY(pp.public_permissions) and {user_id} <> -1)
+            or
+            -- Allowed for a project member with a privileged role
+            exists (select * from users_role ur
+            inner join projects_membership pm
+            ON ur.id = pm.role_id
+            where pm.user_id = {user_id}
+            and pm.project_id = pp.id
+            and 'view_us' = ANY(ur.permissions))
+        )
+        and tt.namespace = '{namespace}'
+        and tt.event_type = 'epics.relateduserstory.create'
+    """
+    accessing_user_id = accessing_user.id or -1  # -1 just in case of anonymous user
+    sql = sql.format(user_id=accessing_user_id, namespace=namespace)
+
+    return RawSQL(sql, ())
 
 
 def get_profile_timeline(user, accessing_user=None):
@@ -211,7 +238,7 @@ def get_user_timeline(user, accessing_user=None):
     namespace = build_user_namespace(user)
     timeline = get_timeline(user, namespace)
     if accessing_user is not None:
-        timeline = filter_timeline_for_user(timeline, accessing_user)
+        timeline = filter_timeline_for_user(timeline, accessing_user, namespace)
     return timeline
 
 
@@ -219,7 +246,8 @@ def get_project_timeline(project, accessing_user=None):
     namespace = build_project_namespace(project)
     timeline = get_timeline(project, namespace)
     if accessing_user is not None:
-        timeline = filter_timeline_for_user(timeline, accessing_user)
+        timeline = filter_timeline_for_user(timeline, accessing_user, namespace)
+
     return timeline
 
 

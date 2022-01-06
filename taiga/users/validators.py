@@ -1,20 +1,10 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
+
 import bleach
 
 from django.core import validators as core_validators
@@ -89,8 +79,8 @@ class UserAdminValidator(UserValidator):
 
 
 class RecoveryValidator(validators.Validator):
-    token = serializers.CharField(max_length=200)
-    password = serializers.CharField(min_length=6)
+    token = serializers.CharField(required=True, max_length=200)
+    password = serializers.CharField(required=True, min_length=6)
 
 
 class ChangeEmailValidator(validators.Validator):
@@ -98,7 +88,7 @@ class ChangeEmailValidator(validators.Validator):
 
 
 class CancelAccountValidator(validators.Validator):
-    cancel_token = serializers.CharField(max_length=200)
+    cancel_token = serializers.CharField()
 
 
 ######################################################

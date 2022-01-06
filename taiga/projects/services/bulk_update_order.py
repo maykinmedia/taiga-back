@@ -1,27 +1,19 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
+
+from contextlib import suppress
+from operator import itemgetter
 
 from django.db import transaction, connection
 from django.core.exceptions import ObjectDoesNotExist
+from psycopg2.extras import execute_values
 
+from taiga.events import events
 from taiga.projects import models
-
-from contextlib import suppress
 
 
 def apply_order_updates(base_orders: dict, new_orders: dict, *, remove_equal_original=False):
@@ -36,7 +28,7 @@ def apply_order_updates(base_orders: dict, new_orders: dict, *, remove_equal_ori
     The elements where no order update is needed will be removed.
     """
     updated_order_ids = set()
-    original_orders = {k:v for k,v in base_orders.items()}
+    original_orders = {k: v for k, v in base_orders.items()}
 
     # Remove the elements from new_orders non existint in base_orders
     invalid_keys = new_orders.keys() - base_orders.keys()
@@ -59,7 +51,7 @@ def apply_order_updates(base_orders: dict, new_orders: dict, *, remove_equal_ori
                 base_orders[id] += 1
                 updated_order_ids.add(id)
 
-    # Overwritting the orders specified
+    # Overwriting the orders specified
     for id, order in new_orders.items():
         if base_orders[id] != order:
             base_orders[id] = order
@@ -237,3 +229,70 @@ def bulk_update_severity_order(project, user, data):
                        (order, id, project.id))
     cursor.execute("DEALLOCATE bulk_update_order")
     cursor.close()
+
+
+@transaction.atomic
+def bulk_update_swimlane_order(project, user, data):
+    with connection.cursor() as curs:
+        execute_values(curs,
+                       """
+                       UPDATE projects_swimlane
+                       SET "order" = tmp.new_order
+                       FROM (VALUES %s) AS tmp (id, new_order)
+                       WHERE tmp.id = projects_swimlane.id""",
+                       data)
+
+        # Send event related to swimlane changes
+        swimlane_ids = tuple(map(itemgetter(0), data))
+        events.emit_event_for_ids(ids=swimlane_ids,
+                                  content_type="projects.swimlane",
+                                  projectid=project.pk)
+
+@transaction.atomic
+def update_order_and_swimlane(swimlane_to_be_deleted, move_to_swimlane):
+
+    # first of all, there will be the user stories without swimlane
+    uss_without_swimlane = swimlane_to_be_deleted.project.user_stories \
+        .filter(swimlane=None).order_by('kanban_order', 'id')
+    ordered_uss_ids = list(uss_without_swimlane.values_list('id', flat=True))
+    ordered_swimlane_ids = [None] * len(ordered_uss_ids)
+
+    # get the uss paired with its swimlane
+    # except the uss in the swimlane to be deleted, which will go to the destination swimlane
+    ordered_swimlanes = {}
+    for s in swimlane_to_be_deleted.project.swimlanes.order_by('order'):
+        s_id = s.id
+        if s_id == swimlane_to_be_deleted.id:
+            s_id = move_to_swimlane.id
+
+        ordered_swimlanes[s.id] = {
+            'ordered_uss': list(s.user_stories.order_by('kanban_order', 'id').values_list('id', flat=True)),
+            'swimlane_id': [s_id] * s.user_stories.count()
+        }
+
+    # put the uss in the swimlane to be deleted after the uss in the destination swimlane
+    ordered_swimlanes[move_to_swimlane.id]['ordered_uss'].extend(
+        ordered_swimlanes[swimlane_to_be_deleted.id]['ordered_uss'])
+    ordered_swimlanes[move_to_swimlane.id]['swimlane_id'].extend(
+        ordered_swimlanes[swimlane_to_be_deleted.id]['swimlane_id'])
+    ordered_swimlanes.pop(swimlane_to_be_deleted.id)
+
+    # compose a flat list with the uss ordered
+    # and its equivalent with the corresponding swimlanes
+    for k, v in ordered_swimlanes.items():
+        ordered_uss_ids.extend(v['ordered_uss'])
+        ordered_swimlane_ids.extend(v['swimlane_id'])
+
+    # compose a list of tuples with the new order to make a bulk update
+    new_indexes = range(0, len(ordered_uss_ids))
+    data = list(zip(ordered_swimlane_ids, ordered_uss_ids, new_indexes))
+
+    with connection.cursor() as curs:
+        execute_values(curs,
+                       """
+                       UPDATE userstories_userstory
+                       SET kanban_order = tmp.new_order,
+                           swimlane_id = tmp.sid
+                       FROM (VALUES %s) AS tmp (sid, ussid, new_order)
+                       WHERE tmp.ussid = userstories_userstory.id""",
+                       data)

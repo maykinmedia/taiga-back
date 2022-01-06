@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import codecs
 import uuid
@@ -50,7 +39,7 @@ from . import services
 from . import tasks
 from . import throttling
 
-from taiga.base.api.utils import get_object_or_404
+from taiga.base.api.utils import get_object_or_error
 
 
 class ProjectExporterViewSet(mixins.ImportThrottlingPolicyMixin, GenericViewSet):
@@ -63,7 +52,7 @@ class ProjectExporterViewSet(mixins.ImportThrottlingPolicyMixin, GenericViewSet)
         if not throttle.allow_request(request, self):
             self.throttled(request, throttle.wait())
 
-        project = get_object_or_404(self.get_queryset(), pk=pk)
+        project = get_object_or_error(self.get_queryset(), request.user, pk=pk)
         self.check_permissions(request, 'export_project', project)
 
         dump_format = request.QUERY_PARAMS.get("dump_format", "plain")
@@ -102,12 +91,11 @@ class ProjectImporterViewSet(mixins.ImportThrottlingPolicyMixin, CreateModelMixi
 
         # Validate if the project can be imported
         is_private = data.get('is_private', False)
-        total_memberships = len([m for m in data.get("memberships", []) if m.get("email", None) != data["owner"]])
-        total_memberships = total_memberships + 1  # 1 is the owner
-        (enough_slots, error_message) = users_services.has_available_slot_for_new_project(
+        memberships = [m["email"] for m in data.get("memberships", []) if m.get("email", None)]
+        (enough_slots, error_message, total_memberships) = services.has_available_slot_for_new_project(
             self.request.user,
             is_private,
-            total_memberships
+            memberships
         )
         if not enough_slots:
             raise exc.NotEnoughSlotsForProject(is_private, total_memberships, error_message)
@@ -143,7 +131,7 @@ class ProjectImporterViewSet(mixins.ImportThrottlingPolicyMixin, CreateModelMixi
                 is_admin=True
             )
 
-        # Create project values choicess
+        # Create project values choices
         if "points" in data:
             services.store.store_project_attributes_values(project_serialized.object, data,
                                                            "points", validators.PointsExportValidator)
@@ -183,6 +171,10 @@ class ProjectImporterViewSet(mixins.ImportThrottlingPolicyMixin, CreateModelMixi
             services.store.store_project_attributes_values(project_serialized.object, data,
                                                            "severities",
                                                            validators.SeverityExportValidator)
+        if "swimlanes" in data:
+            services.store.store_project_attributes_values(project_serialized.object, data,
+                                                           "swimlanes",
+                                                           validators.SwimlaneExportValidator)
 
         if ("points" in data or "issues_types" in data or
                 "issues_statuses" in data or "us_statuses" in data or
@@ -353,13 +345,11 @@ class ProjectImporterViewSet(mixins.ImportThrottlingPolicyMixin, CreateModelMixi
 
         # Validate if the project can be imported
         is_private = dump.get("is_private", False)
-        total_memberships = len([m for m in dump.get("memberships", [])
-                                            if m.get("email", None) != dump["owner"]])
-        total_memberships = total_memberships + 1 # 1 is the owner
-        (enough_slots, error_message) = users_services.has_available_slot_for_new_project(
+        memberships = [m["email"] for m in dump.get("memberships", []) if m.get("email", None)]
+        (enough_slots, error_message, total_memberships) = services.has_available_slot_for_new_project(
             user,
             is_private,
-            total_memberships
+            memberships
         )
         if not enough_slots:
             raise exc.NotEnoughSlotsForProject(is_private, total_memberships, error_message)

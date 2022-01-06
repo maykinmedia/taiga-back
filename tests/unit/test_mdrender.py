@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from unittest.mock import patch, MagicMock
 
@@ -232,13 +220,13 @@ def test_render_relative_image():
 
 
 def test_render_triple_quote_code():
-    expected_result = '<div class="codehilite"><pre><span></span><span class="k">print</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>\n</pre></div>'
+    expected_result = '<div class="codehilite"><pre><span></span><code><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>\n</code></pre></div>'
 
     assert render(dummy_project, "```python\nprint(\"test\")\n```") == expected_result
 
 
 def test_render_triple_quote_and_lang_code():
-    expected_result = '<div class="codehilite"><pre><span></span><span class="k">print</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>\n</pre></div>'
+    expected_result = '<div class="codehilite"><pre><span></span><code><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">)</span>\n</code></pre></div>'
 
     assert render(dummy_project, "```python\nprint(\"test\")\n```") == expected_result
 
@@ -323,3 +311,7 @@ def test_render_attachment_file(settings):
     assert result == expected_result
     assert mock.called is True
     mock.assert_called_with(dummy_project.id, 42)
+
+
+def test_render_markdown_to_html():
+    assert render(dummy_project, "- [x] test") == "<ul class=\"task-list\">\n<li class=\"task-list-item\"><label class=\"task-list-control\"><input checked type=\"checkbox\"><span class=\"task-list-indicator\"></span></label> test</li>\n</ul>"

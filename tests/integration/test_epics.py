@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import uuid
 import csv
@@ -39,6 +27,10 @@ pytestmark = pytest.mark.django_db
 def test_get_invalid_csv(client):
     url = reverse("epics-csv")
 
+    project = f.ProjectFactory.create(epics_csv_uuid=uuid.uuid4().hex)
+    f.EpicFactory.create(project=project, epics_order=1, status=project.default_us_status)
+
+    client.login(project.owner)
     response = client.get(url)
     assert response.status_code == 404
 
@@ -111,6 +103,62 @@ def test_bulk_create_related_userstories(client):
     response = client.json.post(url, json.dumps(data))
     assert response.status_code == 200
     assert len(response.data) == 2
+
+
+def test_bulk_create_related_userstories_with_default_swimlane_and_kanban_enable(client):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user)
+    f.MembershipFactory.create(project=project, user=user, is_admin=True)
+    swimlane = f.SwimlaneFactory.create(project=project)
+    swimlane2 = f.SwimlaneFactory.create(project=project)
+    epic = f.EpicFactory.create(project=project)
+
+    project.default_swimlane = swimlane
+    project.is_kanban_activated = True
+    project.save()
+
+    url = reverse('epics-related-userstories-bulk-create', args=[epic.pk])
+
+    data = {
+        "bulk_userstories": "test1\ntest2",
+        "project_id": project.id
+    }
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    assert len(response.data) == 2
+
+    userstories = epic.user_stories.all()
+    assert userstories[0].swimlane == swimlane
+    assert userstories[1].swimlane == swimlane
+
+
+def test_bulk_create_related_userstories_with_default_swimlane_and_kanban_disable(client):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user)
+    f.MembershipFactory.create(project=project, user=user, is_admin=True)
+    swimlane = f.SwimlaneFactory.create(project=project)
+    swimlane2 = f.SwimlaneFactory.create(project=project)
+    epic = f.EpicFactory.create(project=project)
+
+    project.default_swimlane = swimlane
+    project.is_kanban_activated = False
+    project.save()
+
+    url = reverse('epics-related-userstories-bulk-create', args=[epic.pk])
+
+    data = {
+        "bulk_userstories": "test1\ntest2",
+        "project_id": project.id
+    }
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    assert len(response.data) == 2
+
+    userstories = epic.user_stories.all()
+    assert userstories[0].swimlane == None
+    assert userstories[1].swimlane == None
 
 
 def test_set_related_userstory(client):

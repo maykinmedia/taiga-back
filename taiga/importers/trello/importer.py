@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.utils.translation import ugettext as _
 
@@ -63,8 +52,21 @@ class TrelloClient:
         else:
             self.oauth = None
 
+    def _validate_response(self, response):
+        if response.status_code == 400:
+            raise exc.WrongArguments(_("Invalid Request: %s at %s") % (response.text, response.url))
+        if response.status_code == 401:
+            raise exc.AuthenticationFailed(_("Unauthorized: %s at %s") % (response.text, response.url))
+        if response.status_code == 403:
+            raise exc.PermissionDenied(_("Unauthorized: %s at %s") % (response.text, response.url))
+        if response.status_code == 404:
+            raise exc.NotFound(_("Resource Unavailable: %s at %s") % (response.text, response.url))
+        if response.status_code != 200:
+            raise exc.WrongArguments(_("Resource Unavailable: %s at %s") % (response.text, response.url))
+
     def get(self, uri_path, query_params=None):
         headers = {'Accept': 'application/json'}
+
         if query_params is None:
             query_params = {}
 
@@ -73,19 +75,13 @@ class TrelloClient:
         url = 'https://api.trello.com/1/%s' % uri_path
 
         response = requests.get(url, params=query_params, headers=headers, auth=self.oauth)
-
-        if response.status_code == 400:
-            raise exc.WrongArguments(_("Invalid Request: %s at %s") % (response.text, url))
-        if response.status_code == 401:
-            raise exc.AuthenticationFailed(_("Unauthorized: %s at %s") % (response.text, url))
-        if response.status_code == 403:
-            raise exc.PermissionDenied(_("Unauthorized: %s at %s") % (response.text, url))
-        if response.status_code == 404:
-            raise exc.NotFound(_("Resource Unavailable: %s at %s") % (response.text, url))
-        if response.status_code != 200:
-            raise exc.WrongArguments(_("Resource Unavailable: %s at %s") % (response.text, url))
-
+        self._validate_response(response)
         return response.json()
+
+    def download(self, url):
+        response = requests.get(url, auth=self.oauth)
+        self._validate_response(response)
+        return response.content
 
 
 class TrelloImporter:
@@ -113,6 +109,8 @@ class TrelloImporter:
             if project['prefs']['permissionLevel'] == "org":
                 if 'organization' not in project:
                     is_private = True
+                elif 'prefs' not in project['organization']:
+                    is_private = True
                 elif project['organization']['prefs']['permissionLevel'] == "private":
                     is_private = True
 
@@ -133,12 +131,12 @@ class TrelloImporter:
                 if user['avatarSource'] == "gravatar" and user['gravatarHash']:
                     avatar = 'https://www.gravatar.com/avatar/' + user['gravatarHash'] + '.jpg?s=50'
                 elif user['avatarHash'] is not None:
-                    avatar = 'https://trello-avatars.s3.amazonaws.com/' + user['avatarHash'] + '/50.png'
+                    avatar = 'https://trello-members.s3.amazonaws.com/' +  user['id'] +  '/' + user['avatarHash'] + '/50.png'
             except:
                 # NOTE: Sometimes this piece of code return this exception:
                 #
                 # File "/home/taiga/taiga-back/taiga/importers/trello/importer.py" in list_users
-                #  135.   avatar = 'https://trello-avatars.s3.amazonaws.com/' + user['avatarHash'] + '/50.png'
+                #  135.   avatar = 'https://trello-members.s3.amazonaws.com/' + user['id'] +  '/' + user['avatarHash'] + '/50.png'
                 #
                 # Exception Type: TypeError at /api/v1/importers/trello/list_users
                 # Exception Value: Can't convert 'NoneType' object to str implicitly
@@ -243,9 +241,9 @@ class TrelloImporter:
             creation_template=project_template,
             is_private=options.get('is_private', False),
         )
-        (can_create, error_message) = projects_service.check_if_project_can_be_created_or_updated(project)
+        (can_create, error_message, total_members) = projects_service.check_if_project_can_be_created_or_updated(project)
         if not can_create:
-            raise exceptions.NotEnoughSlotsForProject(project.is_private, 1, error_message)
+            raise exceptions.NotEnoughSlotsForProject(project.is_private, total_members or 1, error_message)
         project.save()
 
         if board.get('organization', None):
@@ -341,7 +339,9 @@ class TrelloImporter:
         for attachment in card['attachments']:
             if attachment['bytes'] is None:
                 continue
-            data = requests.get(attachment['url'])
+
+            data = self._client.download(attachment['url'])
+
             att = Attachment(
                 owner=users_bindings.get(attachment['idMember'], self._user),
                 project=us.project,
@@ -352,7 +352,7 @@ class TrelloImporter:
                 created_date=attachment['date'],
                 is_deprecated=False,
             )
-            att.attached_file.save(attachment['name'], ContentFile(data.content), save=True)
+            att.attached_file.save(attachment['name'], ContentFile(data), save=True)
 
             UserStory.objects.filter(id=us.id, created_date__gt=attachment['date']).update(
                 created_date=attachment['date']

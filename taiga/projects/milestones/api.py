@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.apps import apps
 
@@ -24,7 +13,7 @@ from taiga.base.decorators import detail_route
 from taiga.base.api import ModelCrudViewSet
 from taiga.base.api import ModelListViewSet
 from taiga.base.api.mixins import BlockedByProjectMixin
-from taiga.base.api.utils import get_object_or_404
+from taiga.base.api.utils import get_object_or_error
 from taiga.base.utils.db import get_object_or_none
 
 from taiga.projects.models import Project
@@ -112,7 +101,7 @@ class MilestoneViewSet(HistoryResourceMixin, WatchedResourceMixin,
 
     @detail_route(methods=['get'])
     def stats(self, request, pk=None):
-        milestone = get_object_or_404(models.Milestone, pk=pk)
+        milestone = get_object_or_error(models.Milestone, request.user, pk=pk)
 
         self.check_permissions(request, "stats", milestone)
 
@@ -150,7 +139,7 @@ class MilestoneViewSet(HistoryResourceMixin, WatchedResourceMixin,
 
     @detail_route(methods=["POST"])
     def move_userstories_to_sprint(self, request, pk=None, **kwargs):
-        milestone = get_object_or_404(models.Milestone, pk=pk)
+        milestone = get_object_or_error(models.Milestone, request.user, pk=pk)
 
         self.check_permissions(request, "move_related_items", milestone)
 
@@ -159,8 +148,8 @@ class MilestoneViewSet(HistoryResourceMixin, WatchedResourceMixin,
             return response.BadRequest(validator.errors)
 
         data = validator.data
-        project = get_object_or_404(Project, pk=data["project_id"])
-        milestone_result = get_object_or_404(models.Milestone, pk=data["milestone_id"])
+        project = get_object_or_error(Project, request.user, pk=data["project_id"])
+        milestone_result = get_object_or_error(models.Milestone, request.user, pk=data["milestone_id"])
 
         if data["bulk_stories"]:
             self.check_permissions(request, "move_uss_to_sprint", project)
@@ -171,7 +160,7 @@ class MilestoneViewSet(HistoryResourceMixin, WatchedResourceMixin,
 
     @detail_route(methods=["POST"])
     def move_tasks_to_sprint(self, request, pk=None, **kwargs):
-        milestone = get_object_or_404(models.Milestone, pk=pk)
+        milestone = get_object_or_error(models.Milestone, request.user, pk=pk)
 
         self.check_permissions(request, "move_related_items", milestone)
 
@@ -180,8 +169,8 @@ class MilestoneViewSet(HistoryResourceMixin, WatchedResourceMixin,
             return response.BadRequest(validator.errors)
 
         data = validator.data
-        project = get_object_or_404(Project, pk=data["project_id"])
-        milestone_result = get_object_or_404(models.Milestone, pk=data["milestone_id"])
+        project = get_object_or_error(Project, request.user, pk=data["project_id"])
+        milestone_result = get_object_or_error(models.Milestone, request.user, pk=data["milestone_id"])
 
         if data["bulk_tasks"]:
             self.check_permissions(request, "move_tasks_to_sprint", project)
@@ -192,7 +181,7 @@ class MilestoneViewSet(HistoryResourceMixin, WatchedResourceMixin,
 
     @detail_route(methods=["POST"])
     def move_issues_to_sprint(self, request, pk=None, **kwargs):
-        milestone = get_object_or_404(models.Milestone, pk=pk)
+        milestone = get_object_or_error(models.Milestone, request.user, pk=pk)
 
         self.check_permissions(request, "move_related_items", milestone)
 
@@ -201,8 +190,8 @@ class MilestoneViewSet(HistoryResourceMixin, WatchedResourceMixin,
             return response.BadRequest(validator.errors)
 
         data = validator.data
-        project = get_object_or_404(Project, pk=data["project_id"])
-        milestone_result = get_object_or_404(models.Milestone, pk=data["milestone_id"])
+        project = get_object_or_error(Project, request.user, pk=data["project_id"])
+        milestone_result = get_object_or_error(models.Milestone, request.user, pk=data["milestone_id"])
 
         if data["bulk_issues"]:
             self.check_permissions(request, "move_issues_to_sprint", project)

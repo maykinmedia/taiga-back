@@ -1,23 +1,16 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
+
+from django.utils.translation import ugettext as _
 
 from taiga.base.api import serializers
 from taiga.base.api import validators
+from taiga.base.exceptions import ValidationError
+from taiga.base.fields import ListField
 
 from . import models
 
@@ -31,3 +24,41 @@ class AttachmentValidator(validators.ModelValidator):
                   "description", "is_deprecated", "created_date",
                   "modified_date", "object_id", "order", "sha1", "from_comment")
         read_only_fields = ("owner", "created_date", "modified_date", "sha1")
+
+
+class UpdateAttachmentsOrderBulkValidator(validators.Validator):
+    content_type_id = serializers.IntegerField()
+    object_id = serializers.IntegerField()
+    after_attachment_id = serializers.IntegerField(required=False)
+    bulk_attachments = ListField(child=serializers.IntegerField(min_value=1))
+
+    def validate_after_attachment_id(self, attrs, source):
+        if (attrs.get(source, None) is not None
+                and attrs.get("content_type_id", None) is not None
+                and attrs.get("object_id", None) is not None):
+            filters = {
+                "content_type__id": attrs["content_type_id"],
+                "object_id": attrs["object_id"],
+                "id": attrs[source]
+            }
+
+            if not models.Attachment.objects.filter(**filters).exists():
+                raise ValidationError(_("Invalid attachment id to move after. The attachment must belong "
+                                        "to the same item (epic, userstory, task, issue or wiki page)."))
+
+        return attrs
+
+    def validate_bulk_attachments(self, attrs, source):
+        if (attrs.get("content_type_id", None) is not None
+                and attrs.get("object_id", None) is not None):
+            filters = {
+                "content_type__id": attrs["content_type_id"],
+                "object_id": attrs["object_id"],
+                "id__in": attrs[source]
+            }
+
+            if models.Attachment.objects.filter(**filters).count() != len(filters["id__in"]):
+                raise ValidationError(_("Invalid attachment ids. All attachments must belong to the same "
+                                        "item (epic, userstory, task, issue or wiki page)."))
+
+        return attrs

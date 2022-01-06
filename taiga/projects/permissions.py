@@ -1,31 +1,21 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.utils.translation import ugettext as _
+
+from taiga.base import exceptions as exc
 
 from taiga.base.api.permissions import TaigaResourcePermission
 from taiga.base.api.permissions import IsAuthenticated
 from taiga.base.api.permissions import AllowAny
+from taiga.base.api.permissions import DenyAll
 from taiga.base.api.permissions import IsSuperUser
 from taiga.base.api.permissions import IsObjectOwner
 from taiga.base.api.permissions import PermissionComponent
-
-from taiga.base import exceptions as exc
 
 from taiga.permissions.permissions import HasProjectPerm
 from taiga.permissions.permissions import IsProjectAdmin
@@ -91,14 +81,14 @@ class ProjectPermission(TaigaResourcePermission):
 
 
 class ProjectFansPermission(TaigaResourcePermission):
-    enought_perms = IsProjectAdmin() | IsSuperUser()
+    enough_perms = IsProjectAdmin() | IsSuperUser()
     global_perms = None
     retrieve_perms = HasProjectPerm('view_project')
     list_perms = HasProjectPerm('view_project')
 
 
 class ProjectWatchersPermission(TaigaResourcePermission):
-    enought_perms = IsProjectAdmin() | IsSuperUser()
+    enough_perms = IsProjectAdmin() | IsSuperUser()
     global_perms = None
     retrieve_perms = HasProjectPerm('view_project')
     list_perms = HasProjectPerm('view_project')
@@ -149,6 +139,25 @@ class UserStoryStatusPermission(TaigaResourcePermission):
     bulk_update_order_perms = IsProjectAdmin()
 
 
+class SwimlanePermission(TaigaResourcePermission):
+    retrieve_perms = HasProjectPerm('view_project')
+    create_perms = IsProjectAdmin()
+    update_perms = IsProjectAdmin()
+    partial_update_perms = IsProjectAdmin()
+    destroy_perms = IsProjectAdmin()
+    list_perms = AllowAny()
+    bulk_update_order_perms = IsProjectAdmin()
+
+
+class SwimlaneUserStoryStatusPermission(TaigaResourcePermission):
+    retrieve_perms = HasProjectPerm('view_project')
+    create_perms = DenyAll()
+    update_perms = IsProjectAdmin()
+    partial_update_perms = IsProjectAdmin()
+    destroy_perms =  DenyAll()
+    list_perms = AllowAny()
+
+
 class UserStoryDueDatePermission(TaigaResourcePermission):
     retrieve_perms = HasProjectPerm('view_project')
     create_perms = IsProjectAdmin()
@@ -181,6 +190,7 @@ class TaskDueDatePermission(TaigaResourcePermission):
     bulk_update_order_perms = IsProjectAdmin()
 
 # Issues
+
 
 class SeverityPermission(TaigaResourcePermission):
     retrieve_perms = HasProjectPerm('view_project')

@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.conf import settings
 
@@ -59,17 +48,19 @@ from .extensions.refresh_attachment import RefreshAttachmentExtension
 bleach.ALLOWED_TAGS += ["p", "table", "thead", "tbody", "th", "tr", "td", "h1",
                         "h2", "h3", "h4", "h5", "h6", "div", "pre", "span",
                         "hr", "dl", "dt", "dd", "sup", "img", "del", "br",
-                        "ins"]
+                        "ins", "input", "label"]
 
 bleach.ALLOWED_STYLES.append("background")
 
 bleach.ALLOWED_ATTRIBUTES["a"] = ["href", "title", "alt", "target"]
 bleach.ALLOWED_ATTRIBUTES["img"] = ["alt", "src"]
+bleach.ALLOWED_ATTRIBUTES["input"] = ["type", "checked"]
 bleach.ALLOWED_ATTRIBUTES["*"] = ["class", "style", "id"]
 
 
 def _make_extensions_list(project=None):
-    return [AutolinkExtension(),
+    return ["pymdownx.tasklist",
+            AutolinkExtension(),
             AutomailExtension(),
             SemiSaneListExtension(),
             StrikethroughExtension(),
@@ -84,6 +75,16 @@ def _make_extensions_list(project=None):
             "markdown.extensions.sane_lists",
             "markdown.extensions.toc",
             "markdown.extensions.nl2br"]
+
+def _make_extension_configs():
+    return {
+        "pymdownx.tasklist": {
+            "custom_checkbox": [
+                True,
+                "Add an empty label tag after the input tag to allow for custom styling"
+            ]
+        }
+    }
 
 
 import diff_match_patch
@@ -116,7 +117,8 @@ def cache_by_sha(func):
 
 def _get_markdown(project):
     extensions = _make_extensions_list(project=project)
-    md = Markdown(extensions=extensions)
+    extension_configs = _make_extension_configs()
+    md = Markdown(extensions=extensions, extension_configs=extension_configs)
     md.extracted_data = {"mentions": [], "references": []}
     return md
 

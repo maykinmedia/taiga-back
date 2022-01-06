@@ -1,23 +1,15 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 # This makes all code that import services works and
 # is not the baddest practice ;)
+
+# flake8: noqa
+
 
 from .bulk_update_order import apply_order_updates
 from .bulk_update_order import bulk_update_severity_order
@@ -28,6 +20,7 @@ from .bulk_update_order import bulk_update_task_status_order
 from .bulk_update_order import bulk_update_points_order
 from .bulk_update_order import bulk_update_userstory_status_order
 from .bulk_update_order import bulk_update_epic_status_order
+from .bulk_update_order import bulk_update_swimlane_order
 from .bulk_update_order import update_projects_order_in_bulk
 
 from .filters import get_all_tags
@@ -42,13 +35,15 @@ from .members import create_members_in_bulk
 from .members import get_members_from_bulk
 from .members import remove_user_from_project, project_has_valid_admins, can_user_leave_project
 from .members import get_max_memberships_for_project, get_total_project_memberships
-from .members import check_if_project_can_have_more_memberships
+from .members import check_if_new_member_can_be_created
+from .members import check_if_new_members_can_be_created
 
 from .modules_config import get_modules_config
 
-from .projects import check_if_project_privacity_can_be_changed
+from .projects import check_if_project_privacy_can_be_changed
 from .projects import check_if_project_can_be_created_or_updated
 from .projects import check_if_project_can_be_transfered
+from .projects import check_if_project_can_be_duplicate
 from .projects import check_if_project_is_out_of_owner_limits
 from .projects import orphan_project
 from .projects import delete_project

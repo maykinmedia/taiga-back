@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from functools import partial
 from operator import is_not
@@ -25,7 +14,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from taiga.base import response
 from taiga.base.decorators import detail_route
 from taiga.base.api import serializers
-from taiga.base.api.utils import get_object_or_404
+from taiga.base.api.utils import get_object_or_error
 from taiga.base.fields import WatchersField, MethodField
 from taiga.projects.notifications import services
 
@@ -356,7 +345,7 @@ class WatchersViewSetMixin:
     def retrieve(self, request, *args, **kwargs):
         pk = kwargs.get("pk", None)
         resource_id = kwargs.get("resource_id", None)
-        resource = get_object_or_404(self.resource_model, pk=resource_id)
+        resource = get_object_or_error(self.resource_model, request.user, pk=resource_id)
 
         self.check_permissions(request, 'retrieve', resource)
 
@@ -370,7 +359,7 @@ class WatchersViewSetMixin:
 
     def list(self, request, *args, **kwargs):
         resource_id = kwargs.get("resource_id", None)
-        resource = get_object_or_404(self.resource_model, pk=resource_id)
+        resource = get_object_or_error(self.resource_model, request.user, pk=resource_id)
 
         self.check_permissions(request, 'list', resource)
 

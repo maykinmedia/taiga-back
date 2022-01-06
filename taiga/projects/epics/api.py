@@ -1,25 +1,14 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.http import HttpResponse
 from django.utils.translation import ugettext as _
 
-from taiga.base.api.utils import get_object_or_404
+from taiga.base.api.utils import get_object_or_error
 from taiga.base import filters, response
 from taiga.base import exceptions as exc
 from taiga.base.decorators import list_route
@@ -158,7 +147,7 @@ class EpicViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, Wa
     @list_route(methods=["GET"])
     def filters_data(self, request, *args, **kwargs):
         project_id = request.QUERY_PARAMS.get("project", None)
-        project = get_object_or_404(Project, id=project_id)
+        project = get_object_or_error(Project, request.user, id=project_id)
 
         filter_backends = self.get_filter_backends()
         statuses_filter_backends = (f for f in filter_backends if f != filters.StatusesFilter)
@@ -180,7 +169,7 @@ class EpicViewSet(OCCResourceMixin, VotedResourceMixin, HistoryResourceMixin, Wa
         if uuid is None:
             return response.NotFound()
 
-        project = get_object_or_404(Project, epics_csv_uuid=uuid)
+        project = get_object_or_error(Project, request.user, epics_csv_uuid=uuid)
         queryset = project.epics.all().order_by('ref')
         data = services.epics_to_csv(project, queryset)
         csv_response = HttpResponse(data.getvalue(), content_type='application/csv; charset=utf-8')
@@ -276,7 +265,7 @@ class EpicRelatedUserStoryViewSet(NestedViewSetMixin, HistoryResourceMixin,
 
         data = validator.data
 
-        epic = get_object_or_404(models.Epic, id=kwargs["epic"])
+        epic = get_object_or_error(models.Epic, request.user, id=kwargs["epic"])
         project = Project.objects.get(pk=data.get('project_id'))
 
         self.check_permissions(request, 'bulk_create', project)

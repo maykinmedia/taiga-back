@@ -1,25 +1,14 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.http import HttpResponse
 from django.utils.translation import ugettext as _
 
-from taiga.base.api.utils import get_object_or_404
+from taiga.base.api.utils import get_object_or_error
 from taiga.base import filters, response
 from taiga.base import exceptions as exc
 from taiga.base.decorators import list_route
@@ -220,7 +209,7 @@ class TaskViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
     @list_route(methods=["GET"])
     def filters_data(self, request, *args, **kwargs):
         project_id = request.QUERY_PARAMS.get("project", None)
-        project = get_object_or_404(Project, id=project_id)
+        project = get_object_or_error(Project, request.user, id=project_id)
 
         filter_backends = self.get_filter_backends()
         statuses_filter_backends = (f for f in filter_backends if f != filters.StatusesFilter)
@@ -245,7 +234,7 @@ class TaskViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
         if uuid is None:
             return response.NotFound()
 
-        project = get_object_or_404(Project, tasks_csv_uuid=uuid)
+        project = get_object_or_error(Project, request.user, tasks_csv_uuid=uuid)
         queryset = project.tasks.all().order_by('ref')
         data = services.tasks_to_csv(project, queryset)
         csv_response = HttpResponse(data.getvalue(), content_type='application/csv; charset=utf-8')
@@ -284,8 +273,8 @@ class TaskViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
             return response.BadRequest(validator.errors)
 
         data = validator.data
-        project = get_object_or_404(Project, pk=data["project_id"])
-        milestone = get_object_or_404(Milestone, pk=data["milestone_id"])
+        project = get_object_or_error(Project, request.user, pk=data["project_id"])
+        milestone = get_object_or_error(Milestone, request.user, pk=data["milestone_id"])
 
         self.check_permissions(request, "bulk_update_milestone", project)
 
@@ -300,7 +289,7 @@ class TaskViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
             return response.BadRequest(validator.errors)
 
         data = validator.data
-        project = get_object_or_404(Project, pk=data["project_id"])
+        project = get_object_or_error(Project, request.user, pk=data["project_id"])
 
         self.check_permissions(request, "bulk_update_order", project)
         if project.blocked_code is not None:
@@ -309,17 +298,17 @@ class TaskViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
         user_story = None
         user_story_id = data.get("user_story_id", None)
         if user_story_id is not None:
-            user_story = get_object_or_404(UserStory, pk=user_story_id)
+            user_story = get_object_or_error(UserStory, request.user, pk=user_story_id)
 
         status = None
         status_id = data.get("status_id", None)
         if status_id is not None:
-            status = get_object_or_404(TaskStatus, pk=status_id)
+            status = get_object_or_error(TaskStatus, request.user, pk=status_id)
 
         milestone = None
         milestone_id = data.get("milestone_id", None)
         if milestone_id is not None:
-            milestone = get_object_or_404(Milestone, pk=milestone_id)
+            milestone = get_object_or_error(Milestone, request.user, pk=milestone_id)
 
         ret = services.update_tasks_order_in_bulk(data["bulk_tasks"],
                                                   order_field,

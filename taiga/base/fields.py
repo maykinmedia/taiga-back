@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.forms import widgets
 from django.utils.translation import ugettext as _
@@ -75,6 +64,75 @@ class WatchersField(serializers.WritableField):
 
     def from_native(self, data):
         return data
+
+
+class ListField(serializers.WritableField):
+    """
+    A field whose values are lists of items described by the given child. The child can
+    be another field type (e.g., CharField) or a serializer. However, for serializers, you should
+    instead just use it with the `many=True` option.
+    """
+
+    default_error_messages = {
+        'invalid_type': _('%(value)s is not a list'),
+    }
+    empty = []
+
+    def __init__(self, child=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.child = child
+
+    def initialize(self, parent, field_name):
+        super().initialize(parent, field_name)
+        if self.child:
+            self.child.initialize(parent, field_name)
+
+    def to_native(self, obj):
+        if self.child and obj:
+            return [self.child.to_native(item) for item in obj]
+        return obj
+
+    def from_native(self, data):
+        self.validate_is_list(data)
+        if self.child and data:
+            return [self.child.from_native(item_data) for item_data in data]
+        return data
+
+    def validate(self, value):
+        super().validate(value)
+
+        self.validate_is_list(value)
+
+        if self.child:
+            errors = {}
+            for index, item in enumerate(value):
+                try:
+                    self.child.validate(item)
+                except ValidationError as e:
+                    errors[index] = e.messages
+
+            if errors:
+                raise NestedValidationError(errors)
+
+    def run_validators(self, value):
+        super().run_validators(value)
+
+        if self.child:
+            errors = {}
+            for index, item in enumerate(value):
+                try:
+                    self.child.run_validators(item)
+                except ValidationError as e:
+                    errors[index] = e.messages
+
+            if errors:
+                raise NestedValidationError(errors)
+
+    def validate_is_list(self, value):
+        if value is not None and not isinstance(value, list):
+            raise ValidationError(self.error_messages['invalid_type'],
+                                  code='invalid_type',
+                                  params={'value': value})
 
 
 ####################################################################

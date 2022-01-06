@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import uuid
 
@@ -25,14 +14,22 @@ from taiga.base.utils.urls import get_absolute_url
 
 # Set this in settings.PROJECT_MODULES_CONFIGURATORS["github"]
 def get_or_generate_config(project):
-    config = project.modules_config.config
-    if config and "github" in config:
-        g_config = project.modules_config.config["github"]
-    else:
-        g_config = {"secret": uuid.uuid4().hex}
+    # Default config
+    config = {
+        "secret": uuid.uuid4().hex
+    }
 
+    close_status = project.issue_statuses.filter(is_closed=True).order_by("order").first()
+    if close_status:
+        config["close_status"] = close_status.id
+
+    # Update with current config if exist
+    if project.modules_config.config:
+        config.update(project.modules_config.config.get("github", {}))
+
+    # Generate webhook url
     url = reverse("github-hook-list")
     url = get_absolute_url(url)
     url = "%s?project=%s" % (url, project.id)
-    g_config["webhooks_url"] = url
-    return g_config
+    config["webhooks_url"] = url
+    return config

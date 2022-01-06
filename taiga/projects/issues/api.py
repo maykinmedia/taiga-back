@@ -1,18 +1,11 @@
-# Copyright (C) 2014-2019 Taiga Agile LLC
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
+#
 from django.utils.translation import ugettext as _
 from django.http import HttpResponse
 
@@ -22,7 +15,7 @@ from taiga.base import response
 from taiga.base.decorators import detail_route, list_route
 from taiga.base.api import ModelCrudViewSet, ModelListViewSet
 from taiga.base.api.mixins import BlockedByProjectMixin
-from taiga.base.api.utils import get_object_or_404
+from taiga.base.api.utils import get_object_or_error
 
 from taiga.projects.history.mixins import HistoryResourceMixin
 from taiga.projects.milestones.models import Milestone
@@ -81,7 +74,8 @@ class IssueViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
                        "owner",
                        "assigned_to",
                        "subject",
-                       "total_voters")
+                       "total_voters",
+                       "ref")
 
     def get_serializer_class(self, *args, **kwargs):
         if self.action in ["retrieve", "by_ref"]:
@@ -188,7 +182,7 @@ class IssueViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
     @list_route(methods=["GET"])
     def filters_data(self, request, *args, **kwargs):
         project_id = request.QUERY_PARAMS.get("project", None)
-        project = get_object_or_404(Project, id=project_id)
+        project = get_object_or_error(Project, request.user, id=project_id)
 
         filter_backends = self.get_filter_backends()
         types_filter_backends = (f for f in filter_backends if f != filters.IssueTypesFilter)
@@ -219,7 +213,7 @@ class IssueViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
         if uuid is None:
             return response.NotFound()
 
-        project = get_object_or_404(Project, issues_csv_uuid=uuid)
+        project = get_object_or_error(Project, request.user, issues_csv_uuid=uuid)
         queryset = project.issues.all().order_by('ref')
         data = services.issues_to_csv(project, queryset)
         csv_response = HttpResponse(data.getvalue(), content_type='application/csv; charset=utf-8')
@@ -259,14 +253,15 @@ class IssueViewSet(AssignedToSignalMixin, OCCResourceMixin, VotedResourceMixin,
             return response.BadRequest(validator.errors)
 
         data = validator.data
-        project = get_object_or_404(Project, pk=data["project_id"])
-        milestone = get_object_or_404(Milestone, pk=data["milestone_id"])
+        project = get_object_or_error(Project, request.user, pk=data["project_id"])
+        milestone = get_object_or_error(Milestone, request.user, pk=data["milestone_id"])
 
         self.check_permissions(request, "bulk_update_milestone", project)
 
         ret = services.update_issues_milestone_in_bulk(data["bulk_issues"], milestone)
 
         return response.Ok(ret)
+
 
 class IssueVotersViewSet(VotersViewSetMixin, ModelListViewSet):
     permission_classes = (permissions.IssueVotersPermission,)

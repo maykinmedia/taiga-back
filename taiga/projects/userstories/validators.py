@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.utils.translation import ugettext as _
 
@@ -22,11 +11,12 @@ from taiga.base.api import serializers
 from taiga.base.api import validators
 from taiga.base.exceptions import ValidationError
 from taiga.base.fields import PgArrayField
+from taiga.base.fields import ListField
 from taiga.base.fields import PickledObjectField
 from taiga.base.utils import json
 from taiga.projects.milestones.models import Milestone
 from taiga.projects.mixins.validators import AssignedToValidator
-from taiga.projects.models import UserStoryStatus
+from taiga.projects.models import UserStoryStatus, Swimlane
 from taiga.projects.notifications.mixins import EditableWatchedResourceSerializer
 from taiga.projects.notifications.validators import WatchersValidator
 from taiga.projects.tagging.fields import TagsAndTagsColorsField
@@ -65,12 +55,13 @@ class UserStoryValidator(AssignedToValidator, WatchersValidator,
     class Meta:
         model = models.UserStory
         depth = 0
-        read_only_fields = ('id', 'ref', 'created_date', 'modified_date', 'owner')
+        read_only_fields = ('id', 'ref', 'created_date', 'modified_date', 'owner', 'kanban_order')
 
 
 class UserStoriesBulkValidator(ProjectExistsValidator, validators.Validator):
     project_id = serializers.IntegerField()
     status_id = serializers.IntegerField(required=False)
+    swimlane_id = serializers.IntegerField(required=False)
     bulk_stories = serializers.CharField()
 
     def validate_status_id(self, attrs, source):
@@ -85,19 +76,104 @@ class UserStoriesBulkValidator(ProjectExistsValidator, validators.Validator):
 
         return attrs
 
+    def validate_swimlane_id(self, attrs, source):
+        if attrs.get(source, None) is not None:
+            filters = {
+                "project__id": attrs["project_id"],
+                "id": attrs[source]
+            }
+
+            if not Swimlane.objects.filter(**filters).exists():
+                raise ValidationError(_("Invalid swimlane id. The swimlane must belong to "
+                                        "the same project."))
+
+        return attrs
+
 
 # Order bulk validators
 
-class _UserStoryOrderBulkValidator(validators.Validator):
-    us_id = serializers.IntegerField()
-    order = serializers.IntegerField()
-
-
-class UpdateUserStoriesOrderBulkValidator(ProjectExistsValidator, validators.Validator):
+class UpdateUserStoriesBacklogOrderBulkValidator(ProjectExistsValidator, validators.Validator):
     project_id = serializers.IntegerField()
-    status_id = serializers.IntegerField(required=False)
     milestone_id = serializers.IntegerField(required=False)
-    bulk_stories = _UserStoryOrderBulkValidator(many=True)
+    after_userstory_id = serializers.IntegerField(required=False)
+    before_userstory_id = serializers.IntegerField(required=False)
+    bulk_userstories = ListField(child=serializers.IntegerField(min_value=1))
+
+    def validate_milestone_id(self, attrs, source):
+        milestone_id = attrs.get(source, None)
+
+        if milestone_id:
+            filters = {
+                "project__id": attrs["project_id"],
+                "id": attrs[source]
+            }
+
+            if not Milestone.objects.filter(**filters).exists():
+                raise ValidationError(_("Invalid milestone id. The milestone must belong "
+                                        "to the same project."))
+
+        return attrs
+
+    def validate_after_userstory_id(self, attrs, source):
+        if attrs.get(source, None) is not None:
+            filters = {
+                "project__id": attrs["project_id"],
+                "id": attrs[source]
+            }
+            milestone_id = attrs.get("milestone_id", None)
+            if milestone_id:
+                filters["milestone__id"] = milestone_id
+            else:
+                filters["milestone__isnull"] = True
+
+            if not UserStory.objects.filter(**filters).exists():
+                raise ValidationError(_("Invalid user story id to move after. The user story must belong "
+                                        "to the same project and milestone."))
+
+        return attrs
+
+    def validate_before_userstory_id(self, attrs, source):
+        before_userstory_id = attrs.get(source, None)
+        after_userstory_id = attrs.get("after_userstory_id", None)
+
+        if after_userstory_id and before_userstory_id:
+            raise ValidationError(_("You can't use after and before at the same time."))
+        elif before_userstory_id is not None:
+            filters = {
+                "project__id": attrs["project_id"],
+                "id": attrs[source]
+            }
+            milestone_id = attrs.get("milestone_id", None)
+            if milestone_id:
+                filters["milestone__id"] = milestone_id
+            else:
+                filters["milestone__isnull"] = True
+
+            if not UserStory.objects.filter(**filters).exists():
+                raise ValidationError(_("Invalid user story id to move before. The user story must belong "
+                                        "to the same project and milestone."))
+
+        return attrs
+
+    def validate_bulk_userstories(self, attrs, source):
+        filters = {
+            "project__id": attrs["project_id"],
+            "id__in": attrs[source]
+        }
+
+        if models.UserStory.objects.filter(**filters).count() != len(filters["id__in"]):
+            raise ValidationError(_("Invalid user story ids. All stories must belong to the same project."))
+
+        return attrs
+
+
+class UpdateUserStoriesKanbanOrderBulkValidator(ProjectExistsValidator, validators.Validator):
+    project_id = serializers.IntegerField()
+    status_id = serializers.IntegerField()
+    swimlane_id = serializers.IntegerField(required=False)
+    after_userstory_id = serializers.IntegerField(required=False)
+    before_userstory_id = serializers.IntegerField(required=False)
+    bulk_userstories = ListField(child=serializers.IntegerField(min_value=1))
 
     def validate_status_id(self, attrs, source):
         filters = {
@@ -111,28 +187,69 @@ class UpdateUserStoriesOrderBulkValidator(ProjectExistsValidator, validators.Val
 
         return attrs
 
-    def validate_milestone_id(self, attrs, source):
+    def validate_swimlane_id(self, attrs, source):
         filters = {
             "project__id": attrs["project_id"],
             "id": attrs[source]
         }
 
-        if not Milestone.objects.filter(**filters).exists():
-            raise ValidationError(_("Invalid milestone id. The milistone must belong to the "
-                                    "same project."))
+        if not Swimlane.objects.filter(**filters).exists():
+            raise ValidationError(_("Invalid swimlane id. The swimlane must belong "
+                                    "to the same project."))
 
         return attrs
 
-    def validate_bulk_stories(self, attrs, source):
-        filters = {"project__id": attrs["project_id"]}
-        if "milestone_id" in attrs:
-            filters["milestone__id"] = attrs["milestone_id"]
+    def validate_after_userstory_id(self, attrs, source):
+        if attrs.get(source, None) is not None:
+            filters = {
+                "project__id": attrs["project_id"],
+                "status__id": attrs["status_id"],
+                "id": attrs[source]
+            }
+            swimlane_id = attrs.get("swimlane_id", None)
+            if swimlane_id:
+                filters["swimlane__id"] = swimlane_id
+            else:
+                filters["swimlane__isnull"] = True
 
-        filters["id__in"] = [us["us_id"] for us in attrs[source]]
+            if not UserStory.objects.filter(**filters).exists():
+                raise ValidationError(_("Invalid user story id to move after. The user story must belong "
+                                        "to the same project, status and swimlane."))
+
+        return attrs
+
+    def validate_before_userstory_id(self, attrs, source):
+        before_userstory_id = attrs.get(source, None)
+        after_userstory_id = attrs.get("after_userstory_id", None)
+
+        if after_userstory_id and before_userstory_id:
+            raise ValidationError(_("You can't use after and before at the same time."))
+        elif before_userstory_id is not None:
+            filters = {
+                "project__id": attrs["project_id"],
+                "status__id": attrs["status_id"],
+                "id": attrs[source]
+            }
+            swimlane_id = attrs.get("swimlane_id", None)
+            if swimlane_id:
+                filters["swimlane__id"] = swimlane_id
+            else:
+                filters["swimlane__isnull"] = True
+
+            if not UserStory.objects.filter(**filters).exists():
+                raise ValidationError(_("Invalid user story id to move before. The user story must belong "
+                                        "to the same project, status and swimlane."))
+
+        return attrs
+
+    def validate_bulk_userstories(self, attrs, source):
+        filters = {
+            "project__id": attrs["project_id"],
+            "id__in": attrs[source]
+        }
 
         if models.UserStory.objects.filter(**filters).count() != len(filters["id__in"]):
-            raise ValidationError(_("Invalid user story ids. All stories must belong to the same project "
-                                    "and, if it exists, to the same status and milestone."))
+            raise ValidationError(_("Invalid user story ids. All stories must belong to the same project."))
 
         return attrs
 

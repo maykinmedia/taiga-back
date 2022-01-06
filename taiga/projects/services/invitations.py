@@ -1,23 +1,18 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.apps import apps
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.db import transaction as tx
+from django.db import IntegrityError
+from django.utils.translation import ugettext as _
+
+from taiga.base import exceptions as exc
 
 from taiga.base.mails import mail_builder
 
@@ -37,17 +32,51 @@ def send_invitation(invitation):
 def find_invited_user(email, default=None):
     """Check if the invited user is already a registered.
 
-    :param invitation: Invitation object.
+    :param email: some user email
     :param default: Default object to return if user is not found.
-
-    TODO: only used by importer/exporter and should be moved here
 
     :return: The user if it's found, othwerwise return `default`.
     """
 
     User = apps.get_model(settings.AUTH_USER_MODEL)
+    qs = User.objects.filter(email__iexact=email)
 
-    try:
-        return User.objects.get(email=email)
-    except User.DoesNotExist:
+    if len(qs) > 1:
+        qs = qs.filter(email=email)
+
+    if len(qs) == 0:
         return default
+
+    return qs[0]
+
+
+def get_membership_by_token(token:str):
+    """
+    Given an invitation token, returns a membership instance
+    that matches with specified token.
+
+    If not matches with any membership NotFound exception
+    is raised.
+    """
+    membership_model = apps.get_model("projects", "Membership")
+    qs = membership_model.objects.filter(token=token)
+    if len(qs) == 0:
+        raise exc.NotFound(_("Token does not match any valid invitation."))
+    return qs[0]
+
+
+@tx.atomic
+def accept_invitation_by_existing_user(token:str, user_id:int):
+    user_model = get_user_model()
+    try:
+        user = user_model.objects.get(id=user_id)
+    except user_model.DoesNotExist:
+        raise exc.NotFound(_("User does not exist."))
+
+    membership = get_membership_by_token(token)
+    try:
+        membership.user = user
+        membership.save(update_fields=["user"])
+    except IntegrityError:
+        raise exc.IntegrityError(_("This user is already a member of the project."))
+    return user

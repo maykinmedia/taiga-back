@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from taiga.base.api import serializers
 from taiga.base.fields import Field, DateTimeField, MethodField
@@ -124,6 +113,17 @@ class IssueTypeExportSerializer(RelatedExportSerializer):
     name = Field()
     order = Field()
     color = Field()
+
+
+class SwimlaneUserStoryStatusExportSerializer(RelatedExportSerializer):
+    status = SlugRelatedField(slug_field="name")
+    wip_limit = Field()
+
+
+class SwimlaneExportSerializer(RelatedExportSerializer):
+    name = Field()
+    order = Field()
+    statuses = SwimlaneUserStoryStatusExportSerializer(many=True)
 
 
 class RoleExportSerializer(RelatedExportSerializer):
@@ -263,6 +263,7 @@ class UserStoryExportSerializer(CustomAttributesValuesExportSerializerMixin,
     assigned_to = UserRelatedField()
     assigned_users = MethodField()
     status = SlugRelatedField(slug_field="name")
+    swimlane = SlugRelatedField(slug_field="name")
     milestone = SlugRelatedField(slug_field="name")
     modified_date = DateTimeField()
     created_date = DateTimeField()
@@ -477,6 +478,7 @@ class ProjectExportSerializer(WatcheableObjectLightSerializerMixin):
     issue_duedates = IssueDueDateExportSerializer(many=True)
     priorities = PriorityExportSerializer(many=True)
     severities = SeverityExportSerializer(many=True)
+    swimlanes = SwimlaneExportSerializer(many=True)
     tags_colors = Field()
     default_points = SlugRelatedField(slug_field="name")
     default_epic_status = SlugRelatedField(slug_field="name")
@@ -486,6 +488,7 @@ class ProjectExportSerializer(WatcheableObjectLightSerializerMixin):
     default_severity = SlugRelatedField(slug_field="name")
     default_issue_status = SlugRelatedField(slug_field="name")
     default_issue_type = SlugRelatedField(slug_field="name")
+    default_swimlane = SlugRelatedField(slug_field="name")
     epiccustomattributes = EpicCustomAttributesExportSerializer(many=True)
     userstorycustomattributes = UserStoryCustomAttributeExportSerializer(many=True)
     taskcustomattributes = TaskCustomAttributeExportSerializer(many=True)

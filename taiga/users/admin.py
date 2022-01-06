@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.apps import apps
 
@@ -114,6 +103,15 @@ class RoleAdmin(admin.ModelAdmin):
 
 
 class UserAdmin(DjangoUserAdmin):
+    list_display = ("username", "email", "full_name")
+    list_filter = ("is_superuser", "is_active", "verified_email")
+    search_fields = ("username", "full_name", "email")
+    ordering = ("username",)
+    readonly_fields = (
+        "total_private_projects", "total_memberships_private_projects",
+        "total_public_projects", "total_memberships_public_projects"
+    )
+    filter_horizontal = ()
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         (_("Personal info"), {"fields": ("full_name", "email", "bio", "photo")}),
@@ -122,21 +120,62 @@ class UserAdmin(DjangoUserAdmin):
         (_("Permissions"), {"fields": ("is_active", "is_superuser")}),
         (_("Restrictions"), {"fields": (("max_private_projects", "max_memberships_private_projects"),
                                         ("max_public_projects", "max_memberships_public_projects"))}),
-        (_("Important dates"), {"fields": ("last_login", "date_joined")}),
+        (_("Restrictions (Current Status)"), {"fields": (("total_private_projects", "total_memberships_private_projects"),
+                                                         ("total_public_projects", "total_memberships_public_projects"))}),
+        (_("Important dates"), {"fields": (("last_login", "date_joined", "date_cancelled"),)}),
     )
-    form = UserChangeForm
-    add_form = UserCreationForm
-    list_display = ("username", "email", "full_name")
-    list_filter = ("is_superuser", "is_active", "verified_email")
-    search_fields = ("username", "full_name", "email")
-    ordering = ("username",)
-    filter_horizontal = ()
+    # add_fieldsets is not a standard ModelAdmin attribute. UserAdmin
+    # overrides get_fieldsets to use this attribute when creating a user.
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('username', 'email', 'password1', 'password2')}
+        ),
+    )
     inlines = [
         OwnedProjectsInline,
         MembershipsInline
     ]
+    form = UserChangeForm
+    add_form = UserCreationForm
 
+    def total_private_projects(self, obj):
+        return obj.owned_projects.filter(is_private=True).count()
+    total_private_projects.short_description = _("Total private projects owned")
 
+    def total_memberships_private_projects(self, obj):
+        Membership = apps.get_model("projects", "Membership")
+        return (Membership.objects.filter(project__is_private=True,
+                                          project__owner_id=obj.id,
+                                          user_id__isnull=False)
+                                   .order_by("user_id")
+                                   .distinct("user_id").count()
+                +
+                Membership.objects.filter(project__is_private=True,
+                                          project__owner_id=obj.id,
+                                          user_id__isnull=True)
+                                   .order_by("email")
+                                   .distinct("email").count())
+    total_memberships_private_projects.short_description = _("Total private memberships owned")
+
+    def total_public_projects(self, obj):
+        return obj.owned_projects.filter(is_private=False).count()
+    total_public_projects.short_description = _("Total public projects owned")
+
+    def total_memberships_public_projects(self, obj):
+        Membership = apps.get_model("projects", "Membership")
+        return (Membership.objects.filter(project__is_private=False,
+                                          project__owner_id=obj.id,
+                                          user_id__isnull=False)
+                                   .order_by("user_id")
+                                   .distinct("user_id").count()
+                +
+                Membership.objects.filter(project__is_private=False,
+                                          project__owner_id=obj.id,
+                                          user_id__isnull=True)
+                                   .order_by("email")
+                                   .distinct("email").count())
+    total_memberships_public_projects.short_description = _("Total public memberships owned")
 
 
 admin.site.register(User, UserAdmin)

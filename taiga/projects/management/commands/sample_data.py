@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import datetime
 from os import path
@@ -53,7 +42,7 @@ from taiga.projects.services.stats import get_stats_for_project
 
 
 ATTACHMENT_SAMPLE_DATA = [
-    "taiga/projects/management/commands/sample_data",
+    path.join(settings.BASE_DIR, "taiga/projects/management/commands/sample_data"),
     [".txt", ]
 ]
 
@@ -102,6 +91,12 @@ URL_CHOICES = [
     "https://blog.taiga.io",
     "https://tree.taiga.io",
     "https://tribe.taiga.io"]
+
+WIP_LIMITS_CHOICES = (
+    [0] * 14 +
+    [2] * 1 +
+    [3] * 2 +
+    [4] * 3)
 
 BASE_USERS = getattr(settings, "SAMPLE_DATA_BASE_USERS", {})
 NUM_USERS = getattr(settings, "SAMPLE_DATA_NUM_USERS", 10)
@@ -156,7 +151,7 @@ class Command(BaseCommand):
 
         for x in projects_range:
             project = self.create_project(
-                x,
+                x + 1,  # this way the Project will have the same name as the id: Project 1 with id: 1
                 is_private=x in [2, 4],
                 blocked_code = BLOCKED_BY_STAFF if x in(blocked_projects_range) else None
             )
@@ -225,6 +220,18 @@ class Command(BaseCommand):
                                                         type=self.sd.choice(TYPES_CHOICES)[0],
                                                         project=project,
                                                         order=i)
+
+                # Create swimlanes
+                if self.sd.boolean():
+                    names = set([self.sd.words(1, 2) for i in range(1, 6)])
+                    for j, name in enumerate(names):
+                        swimlane = Swimlane.objects.create(name=name,
+                                                           project=project,
+                                                           order=j+1)
+                        # Set wip limits
+                        for status in swimlane.statuses.all():
+                            status.wip_limit = self.sd.choice(WIP_LIMITS_CHOICES)
+                            status.save()
 
                 start_date = now() - datetime.timedelta(55)
 
@@ -445,7 +452,8 @@ class Command(BaseCommand):
                                       milestone=milestone,
                                       status=self.sd.db_object_from_queryset(project.us_statuses.filter(
                                                                              is_closed=False)),
-                                      tags=self.sd.words(1, 3).split(" "))
+                                      tags=self.sd.words(1, 3).split(" "),
+                                      swimlane=self.sd.choice(list(project.swimlanes.all())) if project.swimlanes.count() > 0 else None)
 
         for role_points in us.role_points.filter(role__in=computable_project_roles):
             if milestone:

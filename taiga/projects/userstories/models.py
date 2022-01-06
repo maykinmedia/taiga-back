@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.db import models
 from django.contrib.contenttypes.fields import GenericRelation
@@ -25,7 +14,7 @@ from django.utils import timezone
 
 from picklefield.fields import PickledObjectField
 
-from taiga.base.utils.time import timestamp_ms
+from taiga.base.utils.time import timestamp_mics
 from taiga.projects.due_dates.models import DueDateMixin
 from taiga.projects.tagging.models import TaggedMixin
 from taiga.projects.occ import OCCModelMixin
@@ -74,6 +63,10 @@ class RolePoints(models.Model):
 
 
 class UserStory(OCCModelMixin, WatchedModelMixin, BlockedMixin, TaggedMixin, DueDateMixin, models.Model):
+    NEW_BACKLOG_ORDER = timestamp_mics
+    NEW_SPRINT_ORDER = timestamp_mics
+    NEW_KANBAN_ORDER = timestamp_mics
+
     ref = models.BigIntegerField(db_index=True, null=True, blank=True, default=None,
                                  verbose_name=_("ref"))
     milestone = models.ForeignKey("milestones.Milestone", null=True, blank=True,
@@ -98,12 +91,12 @@ class UserStory(OCCModelMixin, WatchedModelMixin, BlockedMixin, TaggedMixin, Due
                                     related_name="userstories", through="RolePoints",
                                     verbose_name=_("points"))
 
-    backlog_order = models.BigIntegerField(null=False, blank=False, default=timestamp_ms,
-                                        verbose_name=_("backlog order"))
-    sprint_order = models.BigIntegerField(null=False, blank=False, default=timestamp_ms,
-                                       verbose_name=_("sprint order"))
-    kanban_order = models.BigIntegerField(null=False, blank=False, default=timestamp_ms,
-                                       verbose_name=_("kanban order"))
+    backlog_order = models.BigIntegerField(null=False, blank=False, default=NEW_BACKLOG_ORDER,
+                                           verbose_name=_("backlog order"))
+    sprint_order = models.BigIntegerField(null=False, blank=False, default=NEW_SPRINT_ORDER,
+                                          verbose_name=_("sprint order"))
+    kanban_order = models.BigIntegerField(null=False, blank=False, default=NEW_KANBAN_ORDER,
+                                          verbose_name=_("kanban order"))
 
     created_date = models.DateTimeField(null=False, blank=False,
                                         verbose_name=_("created date"),
@@ -125,8 +118,8 @@ class UserStory(OCCModelMixin, WatchedModelMixin, BlockedMixin, TaggedMixin, Due
         on_delete=models.SET_NULL,
     )
     assigned_users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True,
-                                    default=None, related_name="assigned_userstories",
-                                    verbose_name=_("assigned users"))
+                                            default=None, related_name="assigned_userstories",
+                                            verbose_name=_("assigned users"))
     client_requirement = models.BooleanField(default=False, null=False, blank=True,
                                              verbose_name=_("is client requirement"))
     team_requirement = models.BooleanField(default=False, null=False, blank=True,
@@ -137,15 +130,19 @@ class UserStory(OCCModelMixin, WatchedModelMixin, BlockedMixin, TaggedMixin, Due
                                              related_name="generated_user_stories",
                                              verbose_name=_("generated from issue"))
     generated_from_task = models.ForeignKey("tasks.Task", null=True, blank=True,
-                                             on_delete=models.SET_NULL,
-                                             related_name="generated_user_stories",
-                                             verbose_name=_("generated from task"))
+                                            on_delete=models.SET_NULL,
+                                            related_name="generated_user_stories",
+                                            verbose_name=_("generated from task"))
     from_task_ref = models.TextField(null=True, blank=True, verbose_name=_("reference from task"))
     external_reference = ArrayField(models.TextField(null=False, blank=False),
                                     null=True, blank=True, default=None, verbose_name=_("external reference"))
 
     tribe_gig = PickledObjectField(null=True, blank=True, default=None,
                                    verbose_name="taiga tribe gig")
+
+    swimlane = models.ForeignKey("projects.Swimlane", null=True, blank=True,
+                                 related_name="user_stories", verbose_name=_("swimlane"),
+                                 on_delete=models.SET_NULL)
 
     _importing = None
 
@@ -183,9 +180,9 @@ class UserStory(OCCModelMixin, WatchedModelMixin, BlockedMixin, TaggedMixin, Due
             rp.points.value
             for rp in self.role_points.all()
             if rp.points.value is not None
-       ]
+        ]
 
-        #If we only have None values the sum should be None
+        # If we only have None values the sum should be None
         if not not_null_role_points:
             return None
 

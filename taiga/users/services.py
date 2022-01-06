@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 """
 This model contains a domain logic for users application.
@@ -24,7 +13,6 @@ import csv
 import os
 import uuid
 import zipfile
-
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
@@ -71,7 +59,7 @@ def get_and_validate_user(*, username: str, password: str) -> bool:
     """
 
     user = get_user_by_username_or_email(username)
-    if not user.check_password(password):
+    if not user.check_password(password) or not user.is_active or user.is_system:
         raise exc.WrongArguments(_("Username or password does not matches user."))
 
     return user
@@ -591,31 +579,6 @@ def get_voted_list(for_user, from_user, type=None, q=None):
         dict(zip([col[0] for col in desc], row))
         for row in cursor.fetchall()
     ]
-
-
-def has_available_slot_for_new_project(owner, is_private, total_memberships):
-    if is_private:
-        current_projects = owner.owned_projects.filter(is_private=True).count()
-        max_projects = owner.max_private_projects
-        error_project_exceeded =  _("You can't have more private projects")
-
-        max_memberships = owner.max_memberships_private_projects
-        error_memberships_exceeded = _("This project reaches your current limit of memberships for private projects")
-    else:
-        current_projects = owner.owned_projects.filter(is_private=False).count()
-        max_projects = owner.max_public_projects
-        error_project_exceeded = _("You can't have more public projects")
-
-        max_memberships = owner.max_memberships_public_projects
-        error_memberships_exceeded = _("This project reaches your current limit of memberships for public projects")
-
-    if max_projects is not None and current_projects >= max_projects:
-        return (False, error_project_exceeded)
-
-    if max_memberships is not None and total_memberships > max_memberships:
-        return (False, error_memberships_exceeded)
-
-    return (True, None)
 
 
 def render_profile(user, outfile):

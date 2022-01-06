@@ -1,24 +1,14 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import datetime
 
 from functools import partial
+import logging
 
 from django.apps import apps
 from django.db import IntegrityError, transaction
@@ -30,9 +20,11 @@ from django.utils import timezone
 from django.utils.translation import ugettext as _
 
 from taiga.base import exceptions as exc
+from taiga.base.utils.iterators import iter_queryset
 from taiga.base.mails import InlineCSSTemplateMail
 from taiga.front.templatetags.functions import resolve as resolve_front_url
 from taiga.projects.notifications.choices import NotifyLevel
+from taiga.projects.notifications.models import HistoryChangeNotification
 from taiga.projects.history.choices import HistoryType
 from taiga.projects.history.services import (make_key_from_model_object,
                                              get_last_snapshot_for_key,
@@ -40,9 +32,12 @@ from taiga.projects.history.services import (make_key_from_model_object,
 from taiga.permissions.services import user_has_perm
 from taiga.events import events
 
+from django_pglocks import advisory_lock
+
 from .models import HistoryChangeNotification, Watched
 from .squashing import squash_history_entries
 
+logger = logging.getLogger(__name__)
 
 def remove_lr_cr(s):
     return s.replace("\n", "").replace("\r", "")
@@ -373,7 +368,21 @@ def send_sync_notifications(notification_id):
     for user in notification.notify_users.distinct():
         context["user"] = user
         context["lang"] = user.lang or settings.LANGUAGE_CODE
-        email.send(user.email, context, headers=headers)
+        try:
+            email.send(user.email, context, headers=headers)
+        except Exception:
+            """
+            Catch all smtp exceptions:
+
+              - smtplib.SMTPDataError
+              - smtplib.SMTPException
+              - smtplib.SMTPServerDisconnected
+              - ssl.SSLError
+              - OSError
+              - ValueError
+              - ...
+            """
+            logger.exception("Error sending email notifications")
 
     notification_id = notification.id
     notification.delete()
@@ -563,3 +572,14 @@ def make_ms_thread_index(msg_id, dt):
 
     # base64 encode
     return base64.b64encode(thread_bin).decode("utf-8")
+
+
+def send_bulk_email():
+    with advisory_lock("send-notifications-command", wait=False) as acquired:
+        if acquired:
+            qs = HistoryChangeNotification.objects.all().order_by("-id")
+            for change_notification in iter_queryset(qs, itersize=100):
+                try:
+                    send_sync_notifications(change_notification.pk)
+                except HistoryChangeNotification.DoesNotExist:
+                    pass

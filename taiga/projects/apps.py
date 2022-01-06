@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.apps import AppConfig
 from django.apps import apps
@@ -73,11 +62,36 @@ def connect_us_status_signals():
     signals.post_save.connect(handlers.try_to_close_or_open_user_stories_when_edit_us_status,
                               sender=apps.get_model("projects", "UserStoryStatus"),
                               dispatch_uid="try_to_close_or_open_user_stories_when_edit_us_status")
+    signals.post_save.connect(handlers.create_swimlane_user_story_statuses_on_userstory_status_post_save,
+                              sender=apps.get_model("projects", "UserStoryStatus"),
+                              dispatch_uid="create_swimlane_user_story_statuses_on_userstory_status_post_save")
 
 
 def disconnect_us_status_signals():
     signals.post_save.disconnect(sender=apps.get_model("projects", "UserStoryStatus"),
                                  dispatch_uid="try_to_close_or_open_user_stories_when_edit_us_status")
+    signals.post_save.disconnect(sender=apps.get_model("projects", "UserStoryStatus"),
+                                 dispatch_uid="create_swimlane_user_story_statuses_on_userstory_status_post_save")
+
+
+## Swimlane Signals
+
+def connect_swimlane_signals():
+    from . import signals as handlers
+    signals.post_save.connect(handlers.create_swimlane_user_story_statuses_on_swimalne_post_save,
+                              sender=apps.get_model("projects", "Swimlane"),
+                              dispatch_uid="create_swimlane_user_story_statuses_on_swimalne_post_save")
+    signals.post_save.connect(handlers.set_default_project_swimlane_on_swimalne_post_save,
+                              sender=apps.get_model("projects", "Swimlane"),
+                              dispatch_uid="set_default_project_swimlane_on_swimalne_post_save")
+
+
+def disconnect_swimlane_signals():
+    signals.post_save.disconnect(sender=apps.get_model("projects", "Swimlane"),
+                                 dispatch_uid="create_swimlane_user_story_statuses_on_swimalne_post_save")
+    signals.post_save.disconnect(sender=apps.get_model("projects", "Swimlane"),
+                                 dispatch_uid="set_default_project_swimlane_on_swimalne_post_save")
+
 
 
 ## Tasks Statuses Signals
@@ -97,9 +111,15 @@ def disconnect_task_status_signals():
 class ProjectsAppConfig(AppConfig):
     name = "taiga.projects"
     verbose_name = "Projects"
+    watched_types = [
+      "projects.userstorystatus",
+      "projects.swimlane",
+      "projects.swimlaneuserstorystatus"
+    ]
 
     def ready(self):
         connect_projects_signals()
         connect_memberships_signals()
         connect_us_status_signals()
+        connect_swimlane_signals()
         connect_task_status_signals()

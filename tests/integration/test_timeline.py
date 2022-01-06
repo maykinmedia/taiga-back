@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import pytz
 
@@ -23,7 +11,8 @@ from datetime import datetime, timedelta
 import pytest
 
 from .. import factories
-
+from django.contrib.auth.models import AnonymousUser
+from taiga.timeline.service import build_project_namespace, build_user_namespace, get_timeline
 from taiga.projects.history import services as history_services
 from taiga.timeline import service
 from taiga.timeline.models import Timeline
@@ -573,3 +562,111 @@ def test_timeline_error_use_member_ids_instead_of_memberships_ids():
     external_user_timeline = service.get_profile_timeline(external_user)
     assert len(external_user_timeline) == 1
     assert external_user_timeline[0].event_type == "users.user.create"
+
+
+def test_epic_related_uss():
+    Timeline.objects.all().delete()
+
+    # Users
+    public_project_owner = factories.UserFactory.create(username="Public project's owner")
+    not_qualified_private_project_member = factories.UserFactory.create(username="Unprivileged private role member")
+    private_project_owner = factories.UserFactory.create(username="Privileged private role member")
+
+    # A public project, containing a public epic which contains a private us from a private project
+    public_project = factories.ProjectFactory.create(is_private=False,
+                                                     owner=public_project_owner,
+                                                     anon_permissions=[],
+                                                     public_permissions=["view_us"])
+    factories.MembershipFactory.create(project=public_project, user=public_project.owner, is_admin=True)
+    public_epic = factories.EpicFactory.create(project=public_project, owner=public_project_owner)
+    public_us = factories.UserStoryFactory.create(project=public_project, owner=public_project_owner)
+    related_public_us = factories.RelatedUserStory.create(epic=public_epic, user_story=public_us)
+
+    # A private project, containing the private user story related to the public epic from the public project
+    private_project = factories.ProjectFactory.create(is_private=True,
+                                                      owner=private_project_owner,
+                                                      anon_permissions=[],
+                                                      public_permissions=[])
+    not_qualified_role = factories.RoleFactory(project=private_project, permissions=[])
+    qualified_role = factories.RoleFactory(project=private_project, permissions=["view_us"])
+    factories.MembershipFactory.create(project=private_project,
+                                       user=not_qualified_private_project_member,
+                                       role=not_qualified_role)
+    factories.MembershipFactory.create(project=private_project,
+                                       user=private_project_owner,
+                                       role=qualified_role)
+    private_us = factories.UserStoryFactory.create(project=private_project, owner=private_project_owner)
+    related_private_us = factories.RelatedUserStory.create(epic=public_epic, user_story=private_us)
+
+    service.register_timeline_implementation("epics.relateduserstory", "test", lambda x, extra_data=None: id(x))
+    project_namespace = build_project_namespace(public_project)
+    # Timeline entries regarding the first epic-related public US, for both a user and a project namespace
+    service._add_to_object_timeline(public_project, related_public_us, "create", datetime.now(), project_namespace)
+    service._add_to_object_timeline(public_project_owner, related_public_us, "create", datetime.now(),
+                                    build_user_namespace(public_project_owner))
+    # Timeline entries regarding the first epic-related private US, for both a user and a project namespace
+    service._add_to_object_timeline(public_project, related_private_us, "create", datetime.now(), project_namespace)
+    service._add_to_object_timeline(private_project_owner, related_private_us, "create", datetime.now(),
+                                    build_user_namespace(private_project_owner))
+
+    """
+    # A list of users for the test iterations
+    #
+    # [index0] An anonymous user, who doesn't even have rights to see neither public nor private related USs.
+    # [index1] A public project's owner, who related a public US to an epic from her own public project. She just 
+    #   has privileges to see her public related USs, and is a simple registered user regarding the private project.
+    # [index2] An unprivileged private member, whose role doesn't have access to the private project's USs, 
+    #   but is able to view the related-USs from the public project's.
+    # [index3] A private project's owner, who linked her private US to an epic from the public project.
+                She has privileges to see any related USs.
+    """
+    users = [AnonymousUser(),  # [index 0]
+             public_project_owner,  # [index 1]
+             not_qualified_private_project_member,  # [index 2]
+             private_project_owner]  # [index 3]
+
+    timeline_counters = _helper_get_timelines_for_accessing_users(public_project, users)
+    assert timeline_counters['project_timelines'] == [0, 1, 1, 2]
+    assert timeline_counters['user_timelines'] == {
+        # An anonymous user verifies the number of 'epics.relateduserstory' entries in the other users timelines
+        #  She can't any epic related US on neither of [index1], [index2], or [index3] timelines
+        0: [0, 0, 0],
+        # An [index1] user verifies the number of 'epics.relateduserstory' entries in the other users timelines
+        #  She can just see the public epic related USs on her own [index1] timeline
+        1: [1, 0, 0],
+        # An [index2] user verifies the number of 'epics.relateduserstory' entries in the other users timelines
+        #  She can just see the public epic related USs on her own [index1] timeline
+        2: [1, 0, 0],
+        # An [index3] user verifies the number of 'epics.relateduserstory' entries in the other users timelines
+        #  She can see both the public epic related USs in [index1] timeline, and in her own [index3] timeline
+        3: [1, 0, 1]
+    }
+
+
+def _helper_get_timelines_for_accessing_users(project, users):
+    """
+    Get the number of timeline entries (of 'epics.relateduserstory' type) that the accessing users are able to see,
+    for both a given project's timeline and the user's timelines
+    :param project: the project with the epic which contains the related user stories
+    :param users: both the accessing users, and the users from which recover their (user) timelines
+    :return: Dict with counters for 'epics.relateduserstory' entries for both the (project) and (users)
+    timelines, according to the accessing users privileges
+    """
+    timeline_counts = {'project_timelines': [], 'user_timelines': {}}
+    # An anonymous user doesn't have a timeline to be recovered
+    timeline_users = list(filter(lambda au: au != AnonymousUser(), users))
+
+    for accessing_user in users:
+        project_timeline = service.get_project_timeline(project, accessing_user)
+        project_timeline = project_timeline.exclude(event_type__in=["projects.membership.create"])
+
+        timeline_counts['project_timelines'].append(project_timeline.count())
+        timeline_counts['user_timelines'][users.index(accessing_user)] = []
+
+        for user in timeline_users:
+            user_timeline = service.get_user_timeline(user, accessing_user)
+            user_timeline = user_timeline.exclude(event_type__in=["users.user.create", "projects.membership.create"])
+
+            timeline_counts['user_timelines'][users.index(accessing_user)].append(user_timeline.count())
+
+    return timeline_counts

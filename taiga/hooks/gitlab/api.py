@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.conf import settings
 
@@ -49,23 +38,24 @@ class GitLabViewSet(BaseWebhookApiViewSet):
         if project.modules_config.config is None:
             return False
 
-        project_secret = project.modules_config.config.get("gitlab", {}).get("secret", "")
+        gitlab_config = project.modules_config.config.get("gitlab", {})
+
+        project_secret = gitlab_config.get("secret", "")
         if not project_secret:
             return False
 
-        gitlab_config = project.modules_config.config.get("gitlab", {})
         valid_origin_ips = gitlab_config.get("valid_origin_ips", settings.GITLAB_VALID_ORIGIN_IPS)
         origin_ip = get_ip(request)
-        mathching_origin_ip = True
+        matching_origin_ip = True
 
         if valid_origin_ips:
             try:
-                mathching_origin_ip = len(all_matching_cidrs(origin_ip,valid_origin_ips)) > 0
+                matching_origin_ip = len(all_matching_cidrs(origin_ip,valid_origin_ips)) > 0
 
             except (AddrFormatError, ValueError):
-                mathching_origin_ip = False
+                matching_origin_ip = False
 
-        if not mathching_origin_ip:
+        if not matching_origin_ip:
             return False
 
         return project_secret == secret_key

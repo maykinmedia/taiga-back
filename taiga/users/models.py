@@ -1,31 +1,21 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from importlib import import_module
 
 import random
 import uuid
 import re
+import datetime
 
 from django.apps import apps
 from django.apps.config import MODELS_MODULE_NAME
 from django.conf import settings
-from django.contrib.auth.models import UserManager, AbstractBaseUser
+from django.contrib.auth.models import AbstractBaseUser, UserManager
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.core import validators
@@ -38,7 +28,6 @@ from django.utils.translation import ugettext_lazy as _
 from taiga.base.db.models.fields import JSONField
 from django_pglocks import advisory_lock
 
-from taiga.auth.tokens import get_token_for_user
 from taiga.base.utils.colors import generate_random_hex_color
 from taiga.base.utils.slug import slugify_uniquely
 from taiga.base.utils.files import get_file_path
@@ -121,10 +110,6 @@ class PermissionsMixin(models.Model):
         """
         return self.is_active and self.is_superuser
 
-    @property
-    def is_staff(self):
-        return self.is_superuser
-
 
 def get_default_uuid():
     return uuid.uuid4().hex
@@ -139,10 +124,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         validators=[
             validators.RegexValidator(re.compile(r"^[\w.-]+$"), _("Enter a valid username."), "invalid")
         ])
-    email = models.EmailField(_("email address"), max_length=255, blank=True, unique=True)
+    email = models.EmailField(_("email address"), max_length=255, null=False, blank=False, unique=True)
     is_active = models.BooleanField(_("active"), default=True,
         help_text=_("Designates whether this user should be treated as "
                     "active. Unselect this instead of deleting accounts."))
+    is_staff = models.BooleanField(_('staff status'), default=False,
+        help_text=_('Designates whether the user can log into this admin site.'),
+    )
 
     full_name = models.CharField(_("full name"), max_length=256, blank=True)
     color = models.CharField(max_length=9, null=False, blank=True, default=generate_random_hex_color,
@@ -152,6 +140,7 @@ class User(AbstractBaseUser, PermissionsMixin):
                              max_length=500, null=True, blank=True,
                              verbose_name=_("photo"))
     date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
+    date_cancelled = models.DateTimeField(_("date cancelled"), null=True, blank=True, default=None)
     accepted_terms = models.BooleanField(_("accepted terms"), default=True)
     read_new_terms = models.BooleanField(_("new terms read"), default=False)
     lang = models.CharField(max_length=20, null=True, blank=True, default="",
@@ -181,12 +170,14 @@ class User(AbstractBaseUser, PermissionsMixin):
                                               verbose_name=_("max number of owned public projects"))
     max_memberships_private_projects = models.IntegerField(null=True, blank=True,
                                                            default=settings.MAX_MEMBERSHIPS_PRIVATE_PROJECTS,
-                                                           verbose_name=_("max number of memberships for "
-                                                                          "each owned private project"))
+                                                           verbose_name=_("max number of memberships of "
+                                                                          "different users for all owned "
+                                                                          "private project"))
     max_memberships_public_projects = models.IntegerField(null=True, blank=True,
                                                           default=settings.MAX_MEMBERSHIPS_PUBLIC_PROJECTS,
-                                                          verbose_name=_("max number of memberships for "
-                                                                         "each owned public project"))
+                                                          verbose_name=_("max number of memberships of "
+                                                                         "different users for all owned "
+                                                                         "public project"))
 
     _cached_memberships = None
     _cached_liked_ids = None
@@ -277,10 +268,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         qs = qs.exclude(id=self.id)
         return qs
 
-    def save(self, *args, **kwargs):
-        get_token_for_user(self, "cancel_account")
-        super().save(*args, **kwargs)
-
     def cancel(self):
         with advisory_lock("delete-user"):
             deleted_user_prefix = "deleted-user-{}".format(timestamp_ms())
@@ -297,6 +284,9 @@ class User(AbstractBaseUser, PermissionsMixin):
             self.token = None
             self.set_unusable_password()
             self.photo = None
+            self.date_cancelled = datetime.datetime.now()
+            self.new_email = "{}@taiga.io".format(self.username)
+            self.email_token = None
             self.save()
         self.auth_data.all().delete()
 

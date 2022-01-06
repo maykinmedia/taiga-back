@@ -1,24 +1,23 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Taiga Agile LLC <taiga@taiga.io>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
+
+from typing import List, Optional, Union
 
 from urllib.parse import parse_qs, urldefrag
 
 from django.apps import apps
+from django.db import connection
 from django.conf import settings
 
+from psycopg2.extras import execute_values
+
 from taiga.base.utils.thumbnails import get_thumbnail_url, get_thumbnail
+
+from . import models
 
 # Refresh feature
 
@@ -89,3 +88,67 @@ def get_attachment_image_preview_url(attachment):
     if attachment.attached_file:
         return get_thumbnail_url(attachment.attached_file, settings.THN_ATTACHMENT_PREVIEW)
     return None
+
+
+# Sorting attachments
+
+def update_order_in_bulk(item: Union["Epic", "UserStory", "Task", "Issue", "WikiPage"],
+                         bulk_attachments: List[int],
+                         after_attachment: Optional[models.Attachment] = None):
+    """
+    Updates the order of the attachments specified adding the extra updates
+    needed to keep consistency.
+
+     - `bulk_attachments` should be a list of attachment IDs
+    """
+
+    # get item attachments
+    attachments = item.attachments.all()
+
+    # exclude moved attachments
+    attachments = attachments.exclude(id__in=bulk_attachments)
+
+    # if after_attachment, exclude it and get only elements after it:
+    if after_attachment:
+        attachments = (attachments.exclude(id=after_attachment.id)
+                                  .filter(order__gte=after_attachment.order))
+
+    # sort and get only ids
+    attachment_ids = (attachments.order_by("order", "id")
+                                  .values_list('id', flat=True))
+
+    # append moved user stories
+    attachment_ids = bulk_attachments + list(attachment_ids)
+
+    # calculate the start order
+    if after_attachment:
+        # order start after the after_attachment order
+        start_order = after_attachment.order + 1
+    else:
+        # move at the beggining of the column if there is no after and before
+        start_order = 1
+
+    # prepare rest of data
+    total_attachments = len(attachment_ids)
+    attachment_orders = range(start_order, start_order + total_attachments)
+
+    data = tuple(zip(attachment_ids,
+                     attachment_orders))
+
+    # execute query for update order
+    sql = """
+    UPDATE attachments_attachment
+       SET "order" = tmp.new_order::BIGINT
+      FROM (VALUES %s) AS tmp (id, new_order)
+     WHERE tmp.id = attachments_attachment.id
+    """
+
+    with connection.cursor() as cursor:
+        execute_values(cursor, sql, data)
+
+    # Generate response with modified info
+    res = ({
+        "id": id,
+        "order": order
+    } for (id, order) in data)
+    return res

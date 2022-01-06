@@ -1,17 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Taiga Agile LLC <support@taiga.io>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import uuid
 
@@ -62,7 +54,15 @@ class JiraImporterViewSet(viewsets.ViewSet):
             raise exc.WrongArguments(_("The url param is needed"))
 
         importer = JiraNormalImporter(request.user, url, token)
-        users = importer.list_users()
+        try:
+            users = importer.list_users()
+        except Exception as e:
+            # common error due to modern Jira versions which are unsupported by Taiga
+            raise exc.BadRequest(_("""
+                There was an error; probably due to an unsupported Jira version.
+                Taiga does not support Jira releases from 8.6."""
+            ))
+
         for user in users:
             user['user'] = None
             if not user['email']:

@@ -1,26 +1,16 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import pytest
 
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
+
+from taiga.base.utils import json
 
 from .. import factories as f
 
@@ -79,3 +69,188 @@ def test_create_attachment_with_long_file_name(client):
     client.login(issue1.owner)
     response = client.post(url, data)
     assert response.data["attached_file"].endswith("/"+100*"x"+".txt")
+
+
+######################################
+# Sorting attachments
+######################################
+
+def test_api_update_orders_in_bulk_succeeds_moved_to_the_begining(client):
+    #
+    # -------- |                     | --------
+    #   att1   |   MOVE: att2, att3  |   att2
+    #   att2   |   AFTER: bigining   |   att3
+    #   att3   |                     |   att1
+    #
+
+    project = f.create_project()
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    us = f.create_userstory(project=project)
+
+    att1 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=1)
+    att2 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=2)
+    att3 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=3)
+
+    url = reverse("userstory-attachments-bulk-update-order")
+
+    data = {
+        "object_id": us.id,
+        "after_attachment_id": None,
+        "bulk_attachments": [att2.id,
+                             att3.id]
+    }
+
+    client.login(project.owner)
+
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200, response.data
+
+    updated_ids = [
+        att2.id,
+        att3.id,
+        att1.id,
+    ]
+    res = (us.attachments.filter(id__in=updated_ids)
+                         .values("id", "order")
+                         .order_by("order", "id"))
+    assert response.json() == list(res)
+
+    att1.refresh_from_db()
+    att2.refresh_from_db()
+    att3.refresh_from_db()
+    assert att2.order == 1
+    assert att3.order == 2
+    assert att1.order == 3
+
+
+def test_api_update_orders_in_bulk_succeeds_moved_to_the_middle(client):
+    #
+    # -------- |                     | --------
+    #   att1   |   MOVE: att3, att1  |   att2
+    #   att2   |   AFTER: att2       |   att3
+    #   att3   |                     |   att1
+    #
+
+    project = f.create_project()
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    us = f.create_userstory(project=project)
+
+    att1 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=1)
+    att2 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=2)
+    att3 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=3)
+
+    url = reverse("userstory-attachments-bulk-update-order")
+
+    data = {
+        "object_id": us.id,
+        "after_attachment_id": att2.id,
+        "bulk_attachments": [att3.id,
+                             att1.id]
+    }
+
+    client.login(project.owner)
+
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200, response.data
+
+    updated_ids = [
+        att3.id,
+        att1.id,
+    ]
+    res = (us.attachments.filter(id__in=updated_ids)
+                         .values("id", "order")
+                         .order_by("order", "id"))
+    assert response.json() == list(res)
+
+    att1.refresh_from_db()
+    att2.refresh_from_db()
+    att3.refresh_from_db()
+    assert att2.order == 2
+    assert att3.order == 3
+    assert att1.order == 4
+
+
+def test_api_update_orders_in_bulk_invalid_object_id(client):
+    project = f.create_project()
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    us = f.create_userstory(project=project)
+
+    att1 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=1)
+    att2 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=2)
+    att3 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=3)
+
+    url = reverse("userstory-attachments-bulk-update-order")
+
+    data = {
+        "after_attachment_id": att2.id,
+        "bulk_attachments": [att3.id,
+                             att1.id]
+    }
+
+    client.login(project.owner)
+
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 400, response.data
+    assert len(response.data) == 1
+    assert "object_id" in response.data
+
+    data["object_id"] = None
+
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 400, response.data
+    assert len(response.data) == 1
+    assert "object_id" in response.data
+
+
+def test_api_update_orders_in_bulk_invalid_attachments(client):
+    project = f.create_project()
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    us = f.create_userstory(project=project)
+    us2 = f.create_userstory(project=project)
+
+    att1 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=1)
+    att2 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=2)
+    att3 = f.UserStoryAttachmentFactory(project=us2.project, content_object=us2, order=3)
+
+    url = reverse("userstory-attachments-bulk-update-order")
+
+    data = {
+        "object_id": us.id,
+        "after_attachment_id": att2.id,
+        "bulk_attachments": [att3.id,
+                             att1.id]
+    }
+
+    client.login(project.owner)
+
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 400, response.data
+    assert len(response.data) == 1
+    assert "bulk_attachments" in response.data
+
+
+def test_api_update_orders_in_bulk_invalid_after_attachment_because_object(client):
+    project = f.create_project()
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    us = f.create_userstory(project=project)
+    us2 = f.create_userstory(project=project)
+
+    att1 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=1)
+    att2 = f.UserStoryAttachmentFactory(project=us.project, content_object=us, order=2)
+    att3 = f.UserStoryAttachmentFactory(project=us2.project, content_object=us2, order=3)
+
+    url = reverse("userstory-attachments-bulk-update-order")
+
+    data = {
+        "object_id": us.id,
+        "after_attachment_id": att3.id,
+        "bulk_attachments": [att2.id,
+                             att1.id]
+    }
+
+    client.login(project.owner)
+
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 400, response.data
+    assert len(response.data) == 1
+    assert "after_attachment_id" in response.data

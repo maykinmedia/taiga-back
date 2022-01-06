@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import uuid
 
@@ -140,9 +128,9 @@ def test_modules_retrieve(client, data):
     results = helper_test_http_method(client, 'get', private_url1, None, users)
     assert results == [401, 403, 403, 403, 200]
     results = helper_test_http_method(client, 'get', private_url2, None, users)
-    assert results == [404, 404, 404, 403, 200]
+    assert results == [401, 404, 404, 403, 200]
     results = helper_test_http_method(client, 'get', blocked_url, None, users)
-    assert results == [404, 404, 404, 403, 200]
+    assert results == [401, 404, 404, 403, 200]
 
 
 def test_modules_update(client, data):
@@ -221,8 +209,8 @@ def test_modules_patch(client, data):
 
         patch_data = json.dumps({"att": "test"})
         results = helper_test_http_method(client, 'patch', private_url2, patch_data, users)
-        assert results == [404, 404, 404, 403, 204]
+        assert results == [401, 404, 404, 403, 204]
 
         patch_data = json.dumps({"att": "test"})
         results = helper_test_http_method(client, 'patch', blocked_url, patch_data, users)
-        assert results == [404, 404, 404, 403, 451]
+        assert results == [401, 404, 404, 403, 451]

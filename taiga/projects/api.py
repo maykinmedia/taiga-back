@@ -1,22 +1,12 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import uuid
+import functools
 from easy_thumbnails.source_generators import pil_image
 from dateutil.relativedelta import relativedelta
 
@@ -31,10 +21,10 @@ from django_pglocks import advisory_lock
 from taiga.base import filters
 from taiga.base import exceptions as exc
 from taiga.base import response
-from taiga.base.api import ModelCrudViewSet, ModelListViewSet
+from taiga.base.api import ModelCrudViewSet, ModelListViewSet, ModelUpdateRetrieveViewSet
 from taiga.base.api.mixins import BlockedByProjectMixin, BlockeableSaveMixin, BlockeableDeleteMixin
 from taiga.base.api.permissions import AllowAnyPermission
-from taiga.base.api.utils import get_object_or_404
+from taiga.base.api.utils import get_object_or_error
 from taiga.base.api.viewsets import ViewSet
 from taiga.base.decorators import list_route
 from taiga.base.decorators import detail_route
@@ -49,12 +39,13 @@ from taiga.projects.likes.mixins.viewsets import LikedResourceMixin, FansViewSet
 from taiga.projects.notifications.apps import signal_members_added
 from taiga.projects.notifications.mixins import WatchersViewSetMixin
 from taiga.projects.notifications.choices import NotifyLevel
-from taiga.projects.mixins.on_destroy import MoveOnDestroyMixin
+from taiga.projects.mixins.on_destroy import MoveOnDestroyMixin, MoveOnDestroySwimlaneMixin
 from taiga.projects.mixins.ordering import BulkUpdateOrderMixin
+from taiga.projects.signals import issue_status_post_move_on_destroy as issue_status_post_move_on_destroy_signal
 from taiga.projects.tasks.models import Task
 from taiga.projects.tagging.api import TagsColorsResourceMixin
 from taiga.projects.userstories.models import UserStory, RolePoints
-from taiga.users import services as users_services
+from taiga.projects.userstories.services import reset_userstories_kanban_order_in_bulk
 
 from . import filters as project_filters
 from . import models
@@ -68,6 +59,7 @@ from . import throttling
 ######################################################
 # Project
 ######################################################
+from ..base.exceptions import NotAuthenticated
 
 
 class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
@@ -145,12 +137,11 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
             self.lookup_field = "slug"
             # If we retrieve the project by slug we want to filter by user the
             # permissions and return 404 in case the user don't have access
-            flt = filters.get_filter_expression_can_view_projects(
-                self.request.user)
+            flt = filters.get_filter_expression_can_view_projects(request.user)
 
             qs = qs.filter(flt)
 
-        self.object = get_object_or_404(qs, **kwargs)
+        self.object = get_object_or_error(qs, request.user, **kwargs)
 
         self.check_permissions(request, 'retrieve', self.object)
 
@@ -173,7 +164,7 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
         """
         Change logo to this project.
         """
-        self.object = get_object_or_404(self.get_queryset(), **kwargs)
+        self.object = get_object_or_error(self.get_queryset(), request.user, **kwargs)
         self.check_permissions(request, "change_logo", self.object)
 
         logo = request.FILES.get('logo', None)
@@ -197,7 +188,7 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
         """
         Remove the logo of a project.
         """
-        self.object = get_object_or_404(self.get_queryset(), **kwargs)
+        self.object = get_object_or_error(self.get_queryset(), request.user, **kwargs)
         self.check_permissions(request, "remove_logo", self.object)
         self.pre_conditions_on_save(self.object)
         self.object.logo = None
@@ -352,6 +343,7 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
     @list_route(methods=["GET"])
     def by_slug(self, request, *args, **kwargs):
         slug = request.QUERY_PARAMS.get("slug", None)
+
         return self.retrieve(request, slug=slug)
 
     @detail_route(methods=["GET", "PATCH"])
@@ -434,13 +426,12 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
         project = self.get_object()
         self.check_permissions(request, "transfer_accept", project)
 
-        (can_transfer, error_message) = services.check_if_project_can_be_transfered(
+        (can_transfer, error_message, total_members) = services.check_if_project_can_be_transfered(
             project,
             request.user,
         )
         if not can_transfer:
-            members = project.memberships.count()
-            raise exc.NotEnoughSlotsForProject(project.is_private, members, error_message)
+            raise exc.NotEnoughSlotsForProject(project.is_private, total_members, error_message)
 
         reason = request.DATA.get('reason', None)
         services.accept_project_transfer(project, request.user, token, reason)
@@ -471,27 +462,31 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
             return response.BadRequest(validator.errors)
 
         data = validator.data
+        new_name = data.get("name", "")
+        new_description = data.get("description", "")
+        new_owner = self.request.user
+        new_is_private = data.get('is_private', False)
+        new_members = data.get("users", [])
 
         # Validate if the project can be imported
-        is_private = data.get('is_private', False)
-        total_memberships = len(data.get("users", [])) + 1
-        (enough_slots, error_message) = users_services.has_available_slot_for_new_project(
-            self.request.user,
-            is_private,
-            total_memberships
+        (enough_slots, error_message, total_members) = services.check_if_project_can_be_duplicate(
+            project=project,
+            new_owner=new_owner,
+            new_is_private=new_is_private,
+            new_user_id_members=[m["id"] for m in new_members]
         )
         if not enough_slots:
-            raise exc.NotEnoughSlotsForProject(is_private, total_memberships, error_message)
+            raise exc.NotEnoughSlotsForProject(new_is_private, total_members, error_message)
 
         new_project = services.duplicate_project(
             project=project,
-            owner=request.user,
-            name=data["name"],
-            description=data["description"],
-            is_private=data["is_private"],
-            users=data["users"]
+            name=new_name,
+            description=new_description,
+            owner=new_owner,
+            is_private=new_is_private,
+            users=new_members
         )
-        new_project = get_object_or_404(self.get_queryset(), id=new_project.id)
+        new_project = get_object_or_error(self.get_queryset(), request.user, id=new_project.id)
         serializer = self.get_serializer(new_project)
         return response.Created(serializer.data)
 
@@ -519,12 +514,11 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
             obj.template = self.request.QUERY_PARAMS.get('template', None)
 
         if not obj.id or self.get_object().is_private != obj.is_private:
-            # Validate if the owner have enought slots to create the project
-            # or if you are changing the privacity
-            (can_create_or_update, error_message) = services.check_if_project_can_be_created_or_updated(obj)
+            # Validate if the owner have enough slots to create the project
+            # or if you are changing the privacy
+            (can_create_or_update, error_message, total_members) = services.check_if_project_can_be_created_or_updated(obj)
             if not can_create_or_update:
-                members = max(obj.memberships.count(), 1)
-                raise exc.NotEnoughSlotsForProject(obj.is_private, members, error_message)
+                raise exc.NotEnoughSlotsForProject(obj.is_private, total_members or 1, error_message)
 
         self._set_base_permissions(obj)
         super().pre_save(obj)
@@ -619,6 +613,12 @@ class UserStoryStatusViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
         with advisory_lock("epic-user-story-status-creation-{}".format(project_id)):
             return super().create(request, *args, **kwargs)
 
+    def move_on_destroy_reorder_after_moved(self, moved_to_obj, moved_objs_queryset):
+        project = moved_to_obj.project
+        bulk_userstories_ids = (moved_objs_queryset.order_by('swimlane__order', 'kanban_order')
+                                                   .values_list('id', flat=True))
+        reset_userstories_kanban_order_in_bulk(project, bulk_userstories_ids)
+
 
 class PointsViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
                     ModelCrudViewSet, BulkUpdateOrderMixin):
@@ -640,6 +640,52 @@ class PointsViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
         project_id = request.DATA.get("project", 0)
         with advisory_lock("points-creation-{}".format(project_id)):
             return super().create(request, *args, **kwargs)
+
+
+class SwimlaneViewSet(MoveOnDestroySwimlaneMixin, BlockedByProjectMixin,
+                      ModelCrudViewSet, BulkUpdateOrderMixin):
+
+    model = models.Swimlane
+    serializer_class = serializers.SwimlaneSerializer
+    validator_class = validators.SwimlaneValidator
+    permission_classes = (permissions.SwimlanePermission,)
+    filter_backends = (filters.CanViewProjectFilterBackend,)
+    filter_fields = ('project',)
+    bulk_update_param = "bulk_swimlanes"
+    bulk_update_perm = "change_swimlanes"
+    bulk_update_order_action = services.bulk_update_swimlane_order
+
+    def create(self, request, *args, **kwargs):
+        project_id = request.DATA.get("project", 0)
+        with advisory_lock("swimlane-creation-{}".format(project_id)):
+            return super().create(request, *args, **kwargs)
+
+    def post_save(self, object, created=False):
+        super().post_save(object, created=created)
+
+        if not created:
+            return
+
+        # If it's a creation and it's the first and only swimlane,
+        # then assign all Userstories to this new swimlane
+        total_swimlanes = object.project.swimlanes.count()
+        if total_swimlanes == 1:
+            uss = object.project.user_stories.all()
+            uss.update(swimlane=object)
+
+    def pre_delete(self, obj):
+        if obj.project.default_swimlane_id == obj.id and obj.project.swimlanes.count() > 1:
+            raise exc.BadRequest(_("The default swimlane cannot be deleted."))
+
+
+class SwimlaneUserStoryStatusViewSet(BlockedByProjectMixin, ModelListViewSet, ModelUpdateRetrieveViewSet):
+    model = models.SwimlaneUserStoryStatus
+    serializer_class = serializers.SwimlaneUserStoryStatusSerializer
+    validator_class = validators.SwimlaneUserStoryStatusValidator
+    permission_classes = (permissions.SwimlaneUserStoryStatusPermission,)
+    filter_backends = (filters.custom_filter_class(filters.CanViewProjectFilterBackend,
+                                                   project_query_param="status__project"),)
+    filter_fields = ('project',)
 
 
 class UserStoryDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
@@ -851,6 +897,7 @@ class IssueStatusViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
     move_on_destroy_related_class = Issue
     move_on_destroy_related_field = "status"
     move_on_destroy_project_default_field = "default_issue_status"
+    move_on_destroy_post_destroy_signal = issue_status_post_move_on_destroy_signal
 
     def create(self, request, *args, **kwargs):
         project_id = request.DATA.get("project", 0)
@@ -952,7 +999,7 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
 
         project_id = self.request.QUERY_PARAMS.get("project", None)
         if self.action == "list" and project_id is not None:
-            project = get_object_or_404(models.Project, pk=project_id)
+            project = get_object_or_error(models.Project, self.request.user, pk=project_id)
             use_admin_serializer = permissions_services.is_project_admin(self.request.user, project)
 
         if use_admin_serializer:
@@ -961,15 +1008,26 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
         else:
             return self.serializer_class
 
-    def _check_if_project_can_have_more_memberships(self, project, total_new_memberships):
-        (can_add_memberships, error_type) = services.check_if_project_can_have_more_memberships(
+    def _check_if_new_member_can_be_created(self, membership):
+        (can_add_memberships, error_type, total_memberships) = services.check_if_new_member_can_be_created(
+            membership
+        )
+        if not can_add_memberships:
+            raise exc.NotEnoughSlotsForProject(
+                membership.project.is_private,
+                total_memberships,
+                error_type
+            )
+
+    def _check_if_new_members_can_be_created(self, project, memberships):
+        (can_add_memberships, error_type, total_memberships) = services.check_if_new_members_can_be_created(
             project,
-            total_new_memberships
+            memberships
         )
         if not can_add_memberships:
             raise exc.NotEnoughSlotsForProject(
                 project.is_private,
-                total_new_memberships,
+                total_memberships,
                 error_type
             )
 
@@ -983,9 +1041,10 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
             return response.BadRequest(validator.errors)
 
         data = validator.data
+
         project = models.Project.objects.get(id=data["project_id"])
-        invitation_extra_text = data.get("invitation_extra_text", None)
         self.check_permissions(request, 'bulk_create', project)
+
         if project.blocked_code is not None:
             raise exc.Blocked(_("Blocked element"))
 
@@ -994,17 +1053,17 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
                 "_error_message": _("To add members to a project, first you have to verify your email address")
             })
 
-        if "bulk_memberships" in data and isinstance(data["bulk_memberships"], list):
-            total_new_memberships = len(data["bulk_memberships"])
-            self._check_if_project_can_have_more_memberships(project, total_new_memberships)
+        bulk_memberships = data["bulk_memberships"]
+        invitation_extra_text = data.get("invitation_extra_text", None)
 
         try:
             with advisory_lock("membership-creation-{}".format(project.id)):
-                members = services.create_members_in_bulk(data["bulk_memberships"],
-                                                          project=project,
-                                                          invitation_extra_text=invitation_extra_text,
-                                                          callback=self.post_save,
-                                                          precall=self.pre_save)
+                members = services.get_members_from_bulk(bulk_memberships,
+                                                         project=project,
+                                                         invited_by=request.user,
+                                                         invitation_extra_text=invitation_extra_text)
+                self._check_if_new_members_can_be_created(project, members)
+                services.create_members_in_bulk(members, callback=self.post_save)
                 signal_members_added.send(sender=self.__class__,
                                           user=self.request.user,
                                           project=project,
@@ -1057,6 +1116,21 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
 
         return response.NoContent()
 
+    @list_route(methods=["POST"])
+    def remove_invitation_from_all_my_projects(self, request, **kwargs):
+        private_only = request.DATA.get('private_only', False)
+
+        email = request.DATA.get('email', None)
+        if email is None:
+            raise exc.WrongArguments(_("Email is required"))
+
+        memberships = models.Membership.objects.filter(project__owner=request.user, email=email, user__isnull=True)
+        if private_only:
+            memberships = memberships.filter(project__is_private=True)
+        memberships.delete()
+
+        return response.NoContent()
+
     def pre_delete(self, obj):
         if obj.user is not None and not services.can_user_leave_project(obj.user, obj.project):
             raise exc.BadRequest(_("The project must have an owner and at least one of the users "
@@ -1064,13 +1138,14 @@ class MembershipViewSet(BlockedByProjectMixin, ModelCrudViewSet):
 
     def pre_save(self, obj):
         if not obj.id:
-            self._check_if_project_can_have_more_memberships(obj.project, 1)
-
-        if not obj.token:
-            obj.token = str(uuid.uuid1())
+            self._check_if_new_member_can_be_created(obj)
 
         obj.invited_by = self.request.user
         obj.user = services.find_invited_user(obj.email, default=obj.user)
+
+        if not obj.token and not obj.user:
+            obj.token = str(uuid.uuid1())
+
         super().pre_save(obj)
 
     def post_save(self, object, created=False):
@@ -1093,4 +1168,4 @@ class InvitationViewSet(ModelListViewSet):
     permission_classes = (AllowAnyPermission,)
 
     def list(self, *args, **kwargs):
-        raise exc.PermissionDenied(_("You don't have permisions to see that."))
+        raise exc.PermissionDenied(_("You don't have permissions to see that."))

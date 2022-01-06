@@ -1,29 +1,26 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
+
+import pytest
 
 from django.contrib.auth import get_user_model
 
 from taiga.projects.models import Project
 from taiga.base.utils.slug import slugify
 
-import pytest
-pytestmark = pytest.mark.django_db(transaction=True)
+from tests.utils import disconnect_signals, reconnect_signals
+
+
+def setup_module():
+    disconnect_signals()
+
+
+def teardown_module():
+    reconnect_signals()
 
 
 def test_slugify_1():
@@ -38,6 +35,7 @@ def test_slugify_3():
     assert slugify(None) == ""
 
 
+@pytest.mark.django_db
 def test_project_slug_with_special_chars():
     user = get_user_model().objects.create(username="test")
     project = Project.objects.create(name="漢字", description="漢字", owner=user)
@@ -46,6 +44,7 @@ def test_project_slug_with_special_chars():
     assert project.slug == "test-han-zi"
 
 
+@pytest.mark.django_db
 def test_project_with_existing_name_slug_with_special_chars():
     user = get_user_model().objects.create(username="test")
     Project.objects.create(name="漢字", description="漢字", owner=user)

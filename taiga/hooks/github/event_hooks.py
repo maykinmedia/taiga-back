@@ -1,24 +1,15 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import re
 
-from taiga.hooks.event_hooks import BaseNewIssueEventHook, BaseIssueCommentEventHook, BasePushEventHook
+from taiga.hooks.event_hooks import (BaseIssueEventHook, BaseIssueCommentEventHook, BasePushEventHook,
+                                     ISSUE_ACTION_CREATE, ISSUE_ACTION_UPDATE, ISSUE_ACTION_CLOSE,
+                                     ISSUE_ACTION_REOPEN)
 
 
 class BaseGitHubEventHook():
@@ -33,21 +24,41 @@ class BaseGitHubEventHook():
         return re.sub(r"(\s|^)#(\d+)(\s|$)", template, wiki_text, 0, re.M)
 
 
-class IssuesEventHook(BaseGitHubEventHook, BaseNewIssueEventHook):
+class IssuesEventHook(BaseGitHubEventHook, BaseIssueEventHook):
+    _ISSUE_ACTIONS = {
+      "opened": ISSUE_ACTION_CREATE,
+      "edited": ISSUE_ACTION_UPDATE,
+      "closed": ISSUE_ACTION_CLOSE,
+      "reopened": ISSUE_ACTION_REOPEN,
+    }
+
+    @property
+    def action_type(self):
+        _action = self.payload.get('action', '')
+        return self._ISSUE_ACTIONS.get(_action, None)
+
     def ignore(self):
-        return self.payload.get('action', None) != "opened"
+        return self.action_type not in [
+            ISSUE_ACTION_CREATE,
+            ISSUE_ACTION_UPDATE,
+            ISSUE_ACTION_CLOSE,
+            ISSUE_ACTION_REOPEN,
+        ]
 
     def get_data(self):
         description = self.payload.get('issue', {}).get('body', None)
         project_url = self.payload.get('repository', {}).get('html_url', None)
+        state = self.payload.get('issue', {}).get('state', 'open')
+
         return {
             "number": self.payload.get('issue', {}).get('number', None),
             "subject": self.payload.get('issue', {}).get('title', None),
             "url": self.payload.get('issue', {}).get('html_url', None),
-            "user_id": self.payload.get('issue', {}).get('user', {}).get('id', None),
-            "user_name": self.payload.get('issue', {}).get('user', {}).get('login', None),
-            "user_url": self.payload.get('issue', {}).get('user', {}).get('html_url', None),
+            "user_id": self.payload.get('sender', {}).get('id', None),
+            "user_name": self.payload.get('sender', {}).get('login', None),
+            "user_url": self.payload.get('sender', {}).get('html_url', None),
             "description": self.replace_github_references(project_url, description),
+            "status": self.close_status if state == "closed" else self.open_status,
         }
 
 

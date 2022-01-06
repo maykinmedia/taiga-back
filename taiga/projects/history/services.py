@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 """
 This module contains a main domain logic for object history management.
@@ -270,9 +259,34 @@ def make_diff(oldobj: FrozenObj, newobj: FrozenObj,
     first = oldobj.snapshot
     second = newobj.snapshot
 
-    diff = make_diff_from_dicts(first, second, None, excluded_keys)
+    # The object's attachments are manually handled to avoid considering changes in their URL's token as a user activity
+    #   (just when the `taiga-protected` module is enabled)
+    diff = make_diff_from_dicts(first, second, None, frozenset().union(excluded_keys, frozenset(["attachments"])))
+    attach_diffs = _make_diff_in_attachments(first, second)
+    if attach_diffs:
+        diff["attachments"] = attach_diffs
 
     return FrozenDiff(newobj.key, diff, newobj.snapshot)
+
+
+def _make_diff_in_attachments(first_snapshot, second_snapshot):
+    if "attachments" in first_snapshot:
+        old_attachments = {x["id"]: x for x in first_snapshot["attachments"]}
+        new_attachments = {x["id"]: x for x in second_snapshot["attachments"]}
+        snapshot_attachments_tuple = first_snapshot["attachments"], second_snapshot["attachments"]
+
+        for attach_id in set(tuple(old_attachments.keys()) + tuple(new_attachments.keys())):
+            if attach_id in old_attachments and attach_id in new_attachments:
+                attachments_changed = make_diff_from_dicts(old_attachments[attach_id], new_attachments[attach_id],
+                                              excluded_keys=("filename", "url", "thumb_url", "order"))
+                if attachments_changed:
+                    return snapshot_attachments_tuple
+            elif attach_id in old_attachments and attach_id not in new_attachments:
+                return snapshot_attachments_tuple
+            elif attach_id not in old_attachments and attach_id in new_attachments:
+                return snapshot_attachments_tuple
+
+    return None
 
 
 def make_diff_values(typename: str, fdiff: FrozenDiff) -> dict:

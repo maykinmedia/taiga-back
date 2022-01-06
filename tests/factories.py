@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import uuid
 import threading
@@ -118,6 +106,16 @@ class PointsFactory(Factory):
     project = factory.SubFactory("tests.factories.ProjectFactory")
 
 
+class SwimlaneFactory(Factory):
+    class Meta:
+        model = "projects.Swimlane"
+        strategy = factory.CREATE_STRATEGY
+
+    name = factory.Sequence(lambda n: "Swimlane {}".format(n))
+    order = factory.Sequence(lambda n: n)
+    project = factory.SubFactory("tests.factories.ProjectFactory")
+
+
 class RolePointsFactory(Factory):
     class Meta:
         model = "userstories.RolePoints"
@@ -133,6 +131,7 @@ class EpicAttachmentFactory(Factory):
     owner = factory.SubFactory("tests.factories.UserFactory")
     content_object = factory.SubFactory("tests.factories.EpicFactory")
     attached_file = factory.django.FileField(data=b"File contents")
+    name = factory.Sequence(lambda n: "Epic Attachment {}".format(n))
 
     class Meta:
         model = "attachments.Attachment"
@@ -144,6 +143,7 @@ class UserStoryAttachmentFactory(Factory):
     owner = factory.SubFactory("tests.factories.UserFactory")
     content_object = factory.SubFactory("tests.factories.UserStoryFactory")
     attached_file = factory.django.FileField(data=b"File contents")
+    name = factory.Sequence(lambda n: "User Story Attachment {}".format(n))
 
     class Meta:
         model = "attachments.Attachment"
@@ -155,6 +155,7 @@ class TaskAttachmentFactory(Factory):
     owner = factory.SubFactory("tests.factories.UserFactory")
     content_object = factory.SubFactory("tests.factories.TaskFactory")
     attached_file = factory.django.FileField(data=b"File contents")
+    name = factory.Sequence(lambda n: "Task Attachment {}".format(n))
 
     class Meta:
         model = "attachments.Attachment"
@@ -166,6 +167,7 @@ class IssueAttachmentFactory(Factory):
     owner = factory.SubFactory("tests.factories.UserFactory")
     content_object = factory.SubFactory("tests.factories.IssueFactory")
     attached_file = factory.django.FileField(data=b"File contents")
+    name = factory.Sequence(lambda n: "Issue Attachment {}".format(n))
 
     class Meta:
         model = "attachments.Attachment"
@@ -177,6 +179,7 @@ class WikiAttachmentFactory(Factory):
     owner = factory.SubFactory("tests.factories.UserFactory")
     content_object = factory.SubFactory("tests.factories.WikiPageFactory")
     attached_file = factory.django.FileField(data=b"File contents")
+    name = factory.Sequence(lambda n: "Wiki Attachment {}".format(n))
 
     class Meta:
         model = "attachments.Attachment"
@@ -578,6 +581,7 @@ class AttachmentFactory(Factory):
     content_type = factory.SubFactory("tests.factories.ContentTypeFactory")
     object_id = factory.Sequence(lambda n: n)
     attached_file = factory.django.FileField(data=b"File contents")
+    name = factory.Sequence(lambda n: "Attachment {}".format(n))
 
 
 class HistoryEntryFactory(Factory):
@@ -756,6 +760,21 @@ def create_project(**kwargs):
     project.save()
 
     return project
+
+
+def create_swimlane(**kwargs):
+    "Create a swimlane along with its dependencies."
+
+    project = kwargs.pop("project", None)
+    if project is None:
+        project = ProjectFactory.create()
+
+    defaults = {
+        "project": project,
+    }
+    defaults.update(kwargs)
+
+    return SwimlaneFactory.create(**defaults)
 
 
 def create_user(**kwargs):

@@ -1,27 +1,16 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.apps import apps
 
 from taiga.base import exceptions as exc
 from taiga.base import response
 from taiga.base.api import viewsets
-from taiga.base.api.utils import get_object_or_404
+from taiga.base.api.utils import get_object_or_error
 from taiga.permissions.services import user_has_perm
 
 from .validators import ResolverValidator
@@ -39,30 +28,30 @@ class ResolverViewSet(viewsets.ViewSet):
         data = validator.data
 
         project_model = apps.get_model("projects", "Project")
-        project = get_object_or_404(project_model, slug=data["project"])
+        project = get_object_or_error(project_model, request.user,  slug=data["project"])
 
         self.check_permissions(request, "list", project)
 
         result = {"project": project.pk}
 
         if data["epic"] and user_has_perm(request.user, "view_epics", project):
-            result["epic"] = get_object_or_404(project.epics.all(),
-                                               ref=data["epic"]).pk
+            result["epic"] = get_object_or_error(project.epics.all(), request.user,
+                                                 ref=data["epic"]).pk
         if data["us"] and user_has_perm(request.user, "view_us", project):
-            result["us"] = get_object_or_404(project.user_stories.all(),
-                                             ref=data["us"]).pk
+            result["us"] = get_object_or_error(project.user_stories.all(), request.user,
+                                               ref=data["us"]).pk
         if data["task"] and user_has_perm(request.user, "view_tasks", project):
-            result["task"] = get_object_or_404(project.tasks.all(),
-                                               ref=data["task"]).pk
+            result["task"] = get_object_or_error(project.tasks.all(), request.user,
+                                                 ref=data["task"]).pk
         if data["issue"] and user_has_perm(request.user, "view_issues", project):
-            result["issue"] = get_object_or_404(project.issues.all(),
-                                                ref=data["issue"]).pk
+            result["issue"] = get_object_or_error(project.issues.all(), request.user,
+                                                  ref=data["issue"]).pk
         if data["milestone"] and user_has_perm(request.user, "view_milestones", project):
-            result["milestone"] = get_object_or_404(project.milestones.all(),
-                                                    slug=data["milestone"]).pk
+            result["milestone"] = get_object_or_error(project.milestones.all(), request.user,
+                                                      slug=data["milestone"]).pk
         if data["wikipage"] and user_has_perm(request.user, "view_wiki_pages", project):
-            result["wikipage"] = get_object_or_404(project.wiki_pages.all(),
-                                                   slug=data["wikipage"]).pk
+            result["wikipage"] = get_object_or_error(project.wiki_pages.all(), request.user,
+                                                     slug=data["wikipage"]).pk
 
         if data["ref"]:
             ref_found = False  # No need to continue once one ref is found

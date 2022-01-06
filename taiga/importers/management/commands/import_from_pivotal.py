@@ -1,25 +1,14 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
-from taiga.importers.pivotal import PivotalImporter
+from taiga.importers.pivotal.importer import PivotalImporter
 from taiga.users.models import User
 
 
@@ -28,7 +17,7 @@ class Command(BaseCommand):
         parser.add_argument('--token', dest="token", type=str,
                             help='Auth token')
         parser.add_argument('--project-id', dest="project_id", type=str,
-                            help='Project ID or full name (ex: taigaio/taiga-back)')
+                            help='Project ID or full name (ex: kaleidos-ventures/taiga-back)')
         parser.add_argument('--template', dest='template', default="scrum",
                             help='template to use: scrum or scrum (default scrum)')
         parser.add_argument('--ask-for-users', dest='ask_for_users', const=True,

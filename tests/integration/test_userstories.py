@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 import uuid
 import csv
@@ -53,20 +41,20 @@ def create_uss_fixtures():
     data["epics"] = [f.EpicFactory.create(project=project) for i in range(0, 3)]
     data["tags"] = ["test1test2test3", "test1", "test2", "test3"]
 
-    # ----------------------------------------------------------------------------------------------------
-    # | US    | Status  |  Owner | Assigned To | Assigned Users      | Tags                | Epic        |
-    # |-------#---------#--------#-------------#---------------------#---------------------#--------------
-    # | 0     | status3 |  user2 | None        | None                |      tag1           | epic0       |
-    # | 1     | status3 |  user1 | None        | user1               |           tag2      | None        |
-    # | 2     | status1 |  user3 | None        | None                |      tag1 tag2      | epic1       |
-    # | 3     | status0 |  user2 | None        | None                |                tag3 | None        |
-    # | 4     | status0 |  user1 | user1       | None                |      tag1 tag2 tag3 | epic0       |
-    # | 5     | status2 |  user3 | user1       | None                |                tag3 | None        |
-    # | 6     | status3 |  user2 | user1       | None                |      tag1 tag2      | epic0 epic2 |
-    # | 7     | status0 |  user1 | user2       | None                |                tag3 | None        |
-    # | 8     | status3 |  user3 | user2       | None                |      tag1           | epic2       |
-    # | 9     | status1 |  user2 | user3       | user1               | tag0                | None        |
-    # ----------------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------------------------
+    # | US | Status  |  Owner | Assigned To | Assigned Users | Tags                | Epic        | Milestone |
+    # |----#---------#--------#-------------#----------------#---------------------#--------------------------
+    # | 0  | status3 |  user2 | None        | None           |      tag1           | epic0       | None      |
+    # | 1  | status3 |  user1 | None        | user1          |           tag2      | None        |           |
+    # | 2  | status1 |  user3 | None        | None           |      tag1 tag2      | epic1       | None      |
+    # | 3  | status0 |  user2 | None        | None           |                tag3 | None        |           |
+    # | 4  | status0 |  user1 | user1       | None           |      tag1 tag2 tag3 | epic0       | None      |
+    # | 5  | status2 |  user3 | user1       | None           |                tag3 | None        |           |
+    # | 6  | status3 |  user2 | user1       | None           |      tag1 tag2      | epic0 epic2 | None      |
+    # | 7  | status0 |  user1 | user2       | None           |                tag3 | None        |           |
+    # | 8  | status3 |  user3 | user2       | None           |      tag1           | epic2       | None      |
+    # | 9  | status1 |  user2 | user3       | user1          | tag0                | None        |           |
+    # --------------------------------------------------------------------------------------------------------
 
     (user1, user2, user3, ) = data["users"]
     (status0, status1, status2, status3 ) = data["statuses"]
@@ -74,31 +62,33 @@ def create_uss_fixtures():
     (tag0, tag1, tag2, tag3, ) = data["tags"]
 
     us0 = f.UserStoryFactory.create(project=project, owner=user2, assigned_to=None,
-                              status=status3, tags=[tag1])
+                              status=status3, tags=[tag1], milestone=None)
     f.RelatedUserStory.create(user_story=us0, epic=epic0)
     us1 = f.UserStoryFactory.create(project=project, owner=user1, assigned_to=None,
                               status=status3, tags=[tag2], assigned_users=[user1])
     us2 = f.UserStoryFactory.create(project=project, owner=user3, assigned_to=None,
-                              status=status1, tags=[tag1, tag2])
+                              status=status1, tags=[tag1, tag2], milestone=None)
     f.RelatedUserStory.create(user_story=us2, epic=epic1)
     us3 = f.UserStoryFactory.create(project=project, owner=user2, assigned_to=None,
                               status=status0, tags=[tag3])
     us4 = f.UserStoryFactory.create(project=project, owner=user1, assigned_to=user1,
-                              status=status0, tags=[tag1, tag2, tag3])
+                              status=status0, tags=[tag1, tag2, tag3], milestone=None)
     f.RelatedUserStory.create(user_story=us4, epic=epic0)
     us5 = f.UserStoryFactory.create(project=project, owner=user3, assigned_to=user1,
                               status=status2, tags=[tag3])
     us6 = f.UserStoryFactory.create(project=project, owner=user2, assigned_to=user1,
-                              status=status3, tags=[tag1, tag2])
+                              status=status3, tags=[tag1, tag2], milestone=None)
     f.RelatedUserStory.create(user_story=us6, epic=epic0)
     f.RelatedUserStory.create(user_story=us6, epic=epic2)
     us7 = f.UserStoryFactory.create(project=project, owner=user1, assigned_to=user2,
                               status=status0, tags=[tag3])
     us8 = f.UserStoryFactory.create(project=project, owner=user3, assigned_to=user2,
-                              status=status3, tags=[tag1])
+                              status=status3, tags=[tag1], milestone=None)
     f.RelatedUserStory.create(user_story=us8, epic=epic2)
     us9 = f.UserStoryFactory.create(project=project, owner=user2, assigned_to=user3,
                               status=status1, tags=[tag0], assigned_users=[user1])
+
+    data["userstories"] = [us0, us1, us2, us3, us4, us5, us6, us7, us8, us9]
 
     return data
 
@@ -281,138 +271,57 @@ def test_api_create_in_bulk_with_invalid_status(client):
     assert "status_id" in response.data
 
 
-def test_api_update_orders_in_bulk(client):
+def test_api_create_in_bulk_with_swimlane(client):
     project = f.create_project()
     f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
-    us1 = f.create_userstory(project=project)
-    us2 = f.create_userstory(project=project)
-
-    url1 = reverse("userstories-bulk-update-backlog-order")
-    url2 = reverse("userstories-bulk-update-kanban-order")
-    url3 = reverse("userstories-bulk-update-sprint-order")
-
+    swimlane = f.create_swimlane(project=project)
+    url = reverse("userstories-bulk-create")
     data = {
+        "bulk_stories": "Story #1\nStory #2",
         "project_id": project.id,
-        "bulk_stories": [{"us_id": us1.id, "order": 1},
-                         {"us_id": us2.id, "order": 2}]
+        "swimlane_id": project.default_swimlane_id,
     }
 
     client.login(project.owner)
+    response = client.json.post(url, json.dumps(data))
 
-    response = client.json.post(url1, json.dumps(data))
     assert response.status_code == 200, response.data
+    assert response.data[1]["swimlane"] == project.default_swimlane_id
 
-    response = client.json.post(url2, json.dumps(data))
+
+def test_api_create_in_bulk_with_invalid_swimlane(client):
+    project = f.create_project()
+    swimlane = f.create_swimlane()
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    url = reverse("userstories-bulk-create")
+    data = {
+        "bulk_stories": "Story #1\nStory #2",
+        "project_id": project.id,
+        "swimlane_id": swimlane.id,
+    }
+
+    client.login(project.owner)
+    response = client.json.post(url, json.dumps(data))
+
+    assert response.status_code == 400, response.data
+    assert "swimlane_id" in response.data
+
+
+def test_api_create_in_bulk_with_swimlane_unassigned(client):
+    project = f.create_project()
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    url = reverse("userstories-bulk-create")
+
+    client.login(project.owner)
+
+    data = {
+        "bulk_stories": "Story #1\nStory #2",
+        "project_id": project.id,
+        "swimlane_id": None,
+    }
+    response = client.json.post(url, json.dumps(data))
     assert response.status_code == 200, response.data
-
-    response = client.json.post(url3, json.dumps(data))
-    assert response.status_code == 200, response.data
-
-
-def test_api_update_orders_in_bulk_invalid_userstories(client):
-    project = f.create_project()
-    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
-    us1 = f.create_userstory(project=project)
-    us2 = f.create_userstory(project=project)
-    us3 = f.create_userstory()
-
-    url1 = reverse("userstories-bulk-update-backlog-order")
-    url2 = reverse("userstories-bulk-update-kanban-order")
-    url3 = reverse("userstories-bulk-update-sprint-order")
-
-    data = {
-        "project_id": project.id,
-        "bulk_stories": [{"us_id": us1.id, "order": 1},
-                         {"us_id": us2.id, "order": 2},
-                         {"us_id": us3.id, "order": 3}]
-    }
-
-    client.login(project.owner)
-
-    response = client.json.post(url1, json.dumps(data))
-    assert response.status_code == 400, response.data
-    assert "bulk_stories" in response.data
-
-    response = client.json.post(url2, json.dumps(data))
-    assert response.status_code == 400, response.data
-    assert "bulk_stories" in response.data
-
-    response = client.json.post(url3, json.dumps(data))
-    assert response.status_code == 400, response.data
-    assert "bulk_stories" in response.data
-
-
-def test_api_update_orders_in_bulk_invalid_status(client):
-    project = f.create_project()
-    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
-    status = f.UserStoryStatusFactory.create()
-    us1 = f.create_userstory(project=project, status=status)
-    us2 = f.create_userstory(project=project, status=us1.status)
-    us3 = f.create_userstory(project=project)
-
-    url1 = reverse("userstories-bulk-update-backlog-order")
-    url2 = reverse("userstories-bulk-update-kanban-order")
-    url3 = reverse("userstories-bulk-update-sprint-order")
-
-    data = {
-        "project_id": project.id,
-        "status_id": status.id,
-        "bulk_stories": [{"us_id": us1.id, "order": 1},
-                         {"us_id": us2.id, "order": 2},
-                         {"us_id": us3.id, "order": 3}]
-    }
-
-    client.login(project.owner)
-
-    response = client.json.post(url1, json.dumps(data))
-    assert response.status_code == 400, response.data
-    assert "status_id" in response.data
-
-    response = client.json.post(url2, json.dumps(data))
-    assert response.status_code == 400, response.data
-    assert "status_id" in response.data
-
-    response = client.json.post(url3, json.dumps(data))
-    assert response.status_code == 400, response.data
-    assert "status_id" in response.data
-
-
-def test_api_update_orders_in_bulk_invalid_milestione(client):
-    project = f.create_project()
-    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
-    mil1 = f.MilestoneFactory.create()
-    us1 = f.create_userstory(project=project, milestone=mil1)
-    us2 = f.create_userstory(project=project, milestone=mil1)
-    us3 = f.create_userstory(project=project)
-
-    url1 = reverse("userstories-bulk-update-backlog-order")
-    url2 = reverse("userstories-bulk-update-kanban-order")
-    url3 = reverse("userstories-bulk-update-sprint-order")
-
-    data = {
-        "project_id": project.id,
-        "milestone_id": mil1.id,
-        "bulk_stories": [{"us_id": us1.id, "order": 1},
-                         {"us_id": us2.id, "order": 2},
-                         {"us_id": us3.id, "order": 3}]
-    }
-
-    client.login(project.owner)
-
-    response = client.json.post(url1, json.dumps(data))
-    assert response.status_code == 400, response.data
-    assert "milestone_id" in response.data
-    assert "bulk_stories" in response.data
-
-    response = client.json.post(url2, json.dumps(data))
-    assert response.status_code == 400, response.data
-    assert "milestone_id" in response.data
-    assert "bulk_stories" in response.data
-
-    response = client.json.post(url3, json.dumps(data))
-    assert response.status_code == 400, response.data
-    assert "milestone_id" in response.data
-    assert "bulk_stories" in response.data
+    assert response.data[1]["swimlane"] == None
 
 
 def test_api_update_milestone_in_bulk(client):
@@ -613,7 +522,6 @@ def test_filter_by_multiple_status(client):
 
     client.login(user)
 
-    url = reverse("userstories-list")
     url = "{}?status={},{}".format(reverse("userstories-list"), us1.status.id, us2.status.id)
 
     data = {}
@@ -783,6 +691,62 @@ def test_api_filter_by_assigned_users(client):
     assert number_of_userstories == 2
 
 
+def test_regresion_api_filter_by_assigned_users_for_no_members(client):
+    user = f.UserFactory()
+    user2 = f.UserFactory()
+    user3 = f.UserFactory()
+    project = f.create_project(is_private=False,
+                               anon_permissions=list(map(lambda x: x[0], ANON_PERMISSIONS)),
+                               public_permissions=list(map(lambda x: x[0], ANON_PERMISSIONS)) + ["comment_us"],
+                               owner=user)
+
+    f.MembershipFactory(project=project,
+                        user=user,
+                        role__project=project,
+                        role__permissions=list(map(lambda x: x[0], MEMBERS_PERMISSIONS)))
+
+    f.MembershipFactory(project=project,
+                        user=user2,
+                        role__project=project,
+                        role__permissions=list(map(lambda x: x[0], MEMBERS_PERMISSIONS)))
+
+    f.create_userstory(project=project, subject="test 1", assigned_to=user,
+                       assigned_users=[user.id, user2.id])
+    f.create_userstory(project=project, subject="test 2", assigned_to=user,
+                       assigned_users=[user.id])
+    f.create_userstory(project=project, subject="test 3")
+
+    url = reverse("userstories-list") + "?assigned_users=%s" % (user.id)
+
+    # Project owner
+    client.login(user)
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert len(response.data)  == 2
+
+    # Member
+    client.login(user2)
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert len(response.data)  == 2
+
+    # No member
+    client.login(user3)
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert len(response.data)  == 2
+
+    # Anonymous user
+    client.logout()
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert len(response.data)  == 2
+
+
 def test_api_filter_by_role(client):
     project = f.ProjectFactory.create()
     role1 = f.RoleFactory.create()
@@ -853,6 +817,28 @@ def test_api_filters_data(client):
 
     url = reverse("userstories-filters-data") + "?project={}".format(project.id)
     client.login(user1)
+
+    # Check filter fields
+    response = client.get(url)
+    assert response.status_code == 200
+
+    owners = next(filter(lambda i: i['id'] == user1.id, response.data["owners"]))
+    assert len(owners) == 6
+    assert 'id' in owners
+    assert 'count' in owners
+    assert 'full_name' in owners
+    assert 'photo' in owners
+    assert 'big_photo' in owners
+    assert 'gravatar_id' in owners
+
+    assigned_users = next(filter(lambda i: i['id'] == user1.id, response.data["assigned_users"]))
+    assert len(assigned_users) == 6
+    assert 'id' in assigned_users
+    assert 'count' in assigned_users
+    assert 'full_name' in assigned_users
+    assert 'photo' in assigned_users
+    assert 'big_photo' in assigned_users
+    assert 'gravatar_id' in assigned_users
 
     # No filter
     response = client.get(url)
@@ -970,6 +956,7 @@ def test_api_filters_data(client):
     assert next(filter(lambda i: i['id'] == epic2.id, response.data["epics"]))["count"] == 2
 
 
+
 @pytest.mark.parametrize("filter_name,collection,expected,exclude_expected,is_text", [
     ('status', 'statuses', 3, 7, False),
     ('tags', 'tags', 1, 9, True),
@@ -989,17 +976,59 @@ def test_api_filters(client, filter_name, collection, expected, exclude_expected
         param = options[0].id
 
     # include test
-    url = "{}?project={}&{}={}".format(reverse('userstories-list'), project.id, filter_name, param)
+    url = "{}?project={}&&{}={}".format(reverse('userstories-list'), project.id, filter_name, param)
     response = client.get(url)
     assert response.status_code == 200
     assert len(response.data) == expected
+    assert "taiga-info-backlog-total-userstories" in response["access-control-expose-headers"]
+    assert response.has_header("Taiga-Info-Backlog-Total-Userstories") == False
 
     # exclude test
-    url = "{}?project={}&exclude_{}={}".format(reverse('userstories-list'), project.id,
+    url = "{}?project={}&&exclude_{}={}".format(reverse('userstories-list'), project.id,
                                                filter_name, param)
     response = client.get(url)
     assert response.status_code == 200
     assert len(response.data) == exclude_expected
+    assert "taiga-info-backlog-total-userstories" in response["access-control-expose-headers"]
+    assert response.has_header("Taiga-Info-Backlog-Total-Userstories") == False
+
+
+@pytest.mark.parametrize("filter_name,collection,expected,exclude_expected,backlog_total_uss,is_text", [
+    ('status', 'statuses', 1, 4, 5, False),
+    ('tags', 'tags', 0, 5, 5, True),
+    ('owner', 'users', 1, 4, 5, False),
+    ('role', 'roles', 2, 3, 5, False),
+    ('assigned_users', 'users', 2, 3, 5, False),
+])
+def test_api_filters_for_backlog(client, filter_name, collection, expected, exclude_expected, backlog_total_uss, is_text):
+    data = create_uss_fixtures()
+    project = data["project"]
+    options = data[collection]
+
+    client.login(data["users"][0])
+    if is_text:
+        param = options[0]
+    else:
+        param = options[0].id
+
+    # include test
+    url = "{}?project={}&milestone=null&{}={}".format(reverse('userstories-list'), project.id, filter_name, param)
+    response = client.get(url)
+    assert response.status_code == 200
+    assert len(response.data) == expected
+    assert "taiga-info-backlog-total-userstories" in response["access-control-expose-headers"]
+    assert response.has_header("Taiga-Info-Backlog-Total-Userstories") == True
+    assert response["taiga-info-backlog-total-userstories"] == f"{backlog_total_uss}"
+
+    # exclude test
+    url = "{}?project={}&milestone=null&exclude_{}={}".format(reverse('userstories-list'), project.id,
+                                               filter_name, param)
+    response = client.get(url)
+    assert response.status_code == 200
+    assert len(response.data) == exclude_expected
+    assert "taiga-info-backlog-total-userstories" in response["access-control-expose-headers"]
+    assert response.has_header("Taiga-Info-Backlog-Total-Userstories") == True
+    assert response["taiga-info-backlog-total-userstories"] ==  f"{backlog_total_uss}"
 
 
 def test_api_filters_tags_or_operator(client):
@@ -1063,6 +1092,28 @@ def test_api_filters_data_with_assigned_users(client):
     url = reverse("userstories-filters-data") + "?project={}".format(project.id)
 
     client.login(user1)
+
+    # Check filter fields
+    response = client.get(url)
+    assert response.status_code == 200
+
+    owners = next(filter(lambda i: i['id'] == user1.id, response.data["owners"]))
+    assert len(owners) == 6
+    assert 'id' in owners
+    assert 'count' in owners
+    assert 'full_name' in owners
+    assert 'photo' in owners
+    assert 'big_photo' in owners
+    assert 'gravatar_id' in owners
+
+    assigned_users = next(filter(lambda i: i['id'] == user1.id, response.data["assigned_users"]))
+    assert len(assigned_users) == 6
+    assert 'id' in assigned_users
+    assert 'count' in assigned_users
+    assert 'full_name' in assigned_users
+    assert 'photo' in assigned_users
+    assert 'big_photo' in assigned_users
+    assert 'gravatar_id' in assigned_users
 
     # No filter
     response = client.get(url)
@@ -1150,7 +1201,9 @@ def test_api_filters_data_roles_with_assigned_users(client):
 
 def test_get_invalid_csv(client):
     url = reverse("userstories-csv")
+    project = f.ProjectFactory.create()
 
+    client.login(project.owner)
     response = client.get(url)
     assert response.status_code == 404
 
@@ -1439,7 +1492,7 @@ def test_update_userstory_backlog_order(client):
     url = reverse("userstories-detail", args=[us4.pk])
 
     data = {
-        "version": us4.version,
+        "version": us1.version,
         "backlog_order": 1
     }
 
@@ -1465,3 +1518,180 @@ def test_update_userstory_backlog_order(client):
     assert 2 == user_stories[2]["backlog_order"]
     assert us3.id == user_stories[3]["id"]
     assert 3 == user_stories[3]["backlog_order"]
+
+
+
+def test_api_update_change_kanban_order_if_project_change(client):
+    user1 = f.UserFactory.create()
+    project1 = f.create_project(owner=user1)
+    f.MembershipFactory.create(project=project1, user=project1.owner, is_admin=True)
+    project2 = f.create_project(owner=user1)
+    f.MembershipFactory.create(project=project2, user=project2.owner, is_admin=True)
+    us = f.create_userstory(project=project1, owner=user1, status=project1.default_us_status)
+
+    url = reverse("userstories-detail", args=[us.pk])
+    data = {
+        "version": us.version,
+        "project": project2.id,
+        "status": project2.default_us_status.id,
+        "milestone": None,
+    }
+
+    client.login(project1.owner)
+    response = client.json.patch(url, json.dumps(data))
+    assert response.status_code == 200, response.data
+
+    assert us.kanban_order < response.data["kanban_order"]
+    assert project2.id == response.data["project"]
+
+
+def test_api_update_change_kanban_order_if_status_change(client):
+    user1 = f.UserFactory.create()
+    project = f.create_project(owner=user1)
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    status1 = f.UserStoryStatusFactory(project=project)
+    status2 = f.UserStoryStatusFactory(project=project)
+    us = f.create_userstory(project=project, owner=user1,
+            status=status1, swimlane=project.default_swimlane)
+
+    url = reverse("userstories-detail", args=[us.pk])
+    data = {
+        "version": us.version,
+        "status": status2.id
+    }
+
+    client.login(project.owner)
+    response = client.json.patch(url, json.dumps(data))
+    assert response.status_code == 200, response.data
+
+    assert us.kanban_order < response.data["kanban_order"]
+    assert status2.id == response.data["status"]
+
+
+def test_api_update_change_kanban_order_if_swimlane_change(client):
+    user1 = f.UserFactory.create()
+    project = f.create_project(owner=user1)
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    swimlane1 = f.SwimlaneFactory(project=project)
+    swimlane2 = f.SwimlaneFactory(project=project)
+    us = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=swimlane1)
+
+    url = reverse("userstories-detail", args=[us.pk])
+    data = {
+        "version": us.version,
+        "swimlane": swimlane2.id
+    }
+
+    client.login(project.owner)
+    response = client.json.patch(url, json.dumps(data))
+    assert response.status_code == 200, response.data
+
+    assert us.kanban_order < response.data["kanban_order"]
+    assert swimlane2.id == response.data["swimlane"]
+
+
+def test_api_headers_userstories_without_swimlane_false(client):
+    user1 = f.UserFactory.create()
+    project = f.create_project(owner=user1)
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    swimlane1 = f.SwimlaneFactory(project=project)
+    us1 = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=swimlane1)
+    us2 = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=swimlane1)
+    us3 = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=swimlane1)
+
+    url = f"{reverse('userstories-list')}?project={project.id}"
+
+    client.login(project.owner)
+    response = client.json.get(url)
+    assert response.status_code == 200, response.data
+    assert "taiga-info-userstories-without-swimlane" in response["access-control-expose-headers"]
+    assert response.has_header("Taiga-Info-Userstories-Without-Swimlane") == True
+    assert response["taiga-info-userstories-without-swimlane"] == "false"
+
+
+def test_api_headers_userstories_without_swimlane_true(client):
+    user1 = f.UserFactory.create()
+    project = f.create_project(owner=user1)
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    swimlane1 = f.SwimlaneFactory(project=project)
+    us1 = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=swimlane1)
+    us2 = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=None)
+    us3 = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=swimlane1)
+
+    url = f"{reverse('userstories-list')}?project={project.id}"
+
+    client.login(project.owner)
+    response = client.json.get(url)
+    assert response.status_code == 200, response.data
+    assert "taiga-info-userstories-without-swimlane" in response["access-control-expose-headers"]
+    assert response.has_header("Taiga-Info-Userstories-Without-Swimlane") == True
+    assert response["taiga-info-userstories-without-swimlane"] == "true"
+
+
+def test_api_headers_userstories_without_swimlane_not_send(client):
+    user1 = f.UserFactory.create()
+    project = f.create_project(owner=user1)
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    swimlane1 = f.SwimlaneFactory(project=project)
+    us1 = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=swimlane1)
+    us2 = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=None)
+    us3 = f.create_userstory(project=project, owner=user1,
+            status=project.default_us_status, swimlane=swimlane1)
+
+    url = reverse('userstories-list')
+
+    client.login(project.owner)
+    response = client.json.get(url)
+    assert response.status_code == 200, response.data
+    assert "taiga-info-userstories-without-swimlane" in response["access-control-expose-headers"]
+    assert response.has_header("Taiga-Info-Userstories-Without-Swimlane") == False
+
+
+def test_api_list_userstory_using_onlyref_serializer(client):
+    project = f.create_project(owner=f.UserFactory.create())
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    us1 = f.create_userstory(project=project)
+    us2 = f.create_userstory(project=project)
+    us3 = f.create_userstory(project=project)
+
+    url = f"{reverse('userstories-list')}?only_ref=true"
+
+    client.login(project.owner)
+    response = client.json.get(url)
+    assert response.status_code == 200, response.data
+    assert set(response.data[0].keys()) == set(["id", "ref"])
+
+
+def test_bug_regresion_api_by_ref_userstory_using_onlyref_serializer(client):
+    # Prevent error triying to get detail of userstory with only_ref=true
+    #
+    #   File ".../taiga-back/taiga/projects/userstories/serializers.py", line 124, in get_points
+    #       assert hasattr(obj, "role_points_attr"), "instance must have a role_points_attr attribute"
+    #   AssertionError: instance must have a role_points_attr attribute
+
+    project = f.create_project(owner=f.UserFactory.create())
+    f.MembershipFactory.create(project=project, user=project.owner, is_admin=True)
+    us1 = f.create_userstory(project=project)
+
+    url = f"{reverse('userstories-by-ref')}?include_attachments=true&include_tasks=true&only_ref=true&page=40&project={us1.project_id}&ref={us1.ref}"
+
+    client.login(project.owner)
+    response = client.json.get(url)
+    assert response.status_code == 200, response.data
+    assert set(response.data.keys()) != set(["id", "ref"])
+
+    url = f"{reverse('userstories-detail', args=[us1.id])}?include_attachments=true&include_tasks=true&only_ref=true"
+
+    client.login(project.owner)
+    response = client.json.get(url)
+    assert response.status_code == 200, response.data
+    assert set(response.data.keys()) != set(["id", "ref"])

@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from taiga.base.utils import db
 from taiga.events import events
@@ -26,17 +15,19 @@ from taiga.projects.userstories.models import UserStory
 
 
 def calculate_milestone_is_closed(milestone):
-    all_us_closed = all([user_story.is_closed for user_story in milestone.user_stories.all()])
+    all_us_closed = all([user_story.is_closed for user_story in
+                         milestone.user_stories.all()])
     all_tasks_closed = all([task.status is not None and task.status.is_closed for task in
-                            milestone.tasks.all()])
-    all_issues_closed = all([issue.is_closed for issue in milestone.issues.all()])
+                            milestone.tasks.filter(user_story__isnull=True)])
+    all_issues_closed = all([issue.is_closed for issue in
+                             milestone.issues.all()])
 
-    uss_check = milestone.user_stories.all().count() > 0 \
-        and all_tasks_closed and all_us_closed and all_issues_closed
-    issues_check = milestone.issues.all().count() > 0 and all_issues_closed \
-        and all_tasks_closed and all_us_closed
-    tasks_check = milestone.tasks.all().count() > 0 and all_tasks_closed \
-        and all_issues_closed and all_us_closed
+    uss_check = (milestone.user_stories.all().count() > 0
+        and all_tasks_closed and all_us_closed and all_issues_closed)
+    tasks_check = (milestone.tasks.filter(user_story__isnull=True).count() > 0
+        and all_tasks_closed and all_issues_closed and all_us_closed)
+    issues_check = (milestone.issues.all().count() > 0
+        and all_issues_closed and all_tasks_closed and all_us_closed)
 
     return uss_check or issues_check or tasks_check
 
@@ -45,7 +36,6 @@ def close_milestone(milestone):
     if not milestone.closed:
         milestone.closed = True
         milestone.save(update_fields=["closed",])
-
 
 def open_milestone(milestone):
     if milestone.closed:

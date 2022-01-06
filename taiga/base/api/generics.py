@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 # The code is partially taken (and modified) from django rest framework
 # that is licensed under the following terms:
@@ -49,7 +38,7 @@ from . import views
 from . import mixins
 from . import pagination
 from .settings import api_settings
-from .utils import get_object_or_404
+from .utils import get_object_or_error
 
 
 class GenericAPIView(pagination.PaginationMixin,
@@ -156,7 +145,7 @@ class GenericAPIView(pagination.PaginationMixin,
     ###########################################################
 
     def get_serializer_class(self):
-        if self.action == "list" and hasattr(self, "list_serializer_class"):
+        if hasattr(self, "action") and self.action == "list" and hasattr(self, "list_serializer_class"):
             return self.list_serializer_class
 
         serializer_class = self.serializer_class
@@ -244,7 +233,7 @@ class GenericAPIView(pagination.PaginationMixin,
                                         'attribute on the view correctly.' %
                                         (self.__class__.__name__, self.lookup_field)))
 
-        obj = get_object_or_404(queryset, **filter_kwargs)
+        obj = get_object_or_error(queryset, self.request.user, **filter_kwargs)
         return obj
 
     def get_object_or_none(self):

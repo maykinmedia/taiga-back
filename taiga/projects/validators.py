@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.db.models import Q
 from django.utils.translation import ugettext as _
@@ -51,7 +40,7 @@ class DuplicatedNameInProjectValidator:
             qs = model.objects.filter(project=attrs["project"], name=attrs[source])
 
         if qs and qs.exists():
-            raise ValidationError(_("Name duplicated for the project"))
+            raise ValidationError(_("Duplicated name"))
 
         return attrs
 
@@ -82,6 +71,18 @@ class UserStoryStatusValidator(DuplicatedNameInProjectValidator, validators.Mode
 class PointsValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
     class Meta:
         model = models.Points
+
+
+class SwimlaneValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
+    class Meta:
+        model = models.Swimlane
+        read_only_fields = ("order",)
+
+
+class SwimlaneUserStoryStatusValidator(validators.ModelValidator):
+    class Meta:
+        model = models.SwimlaneUserStoryStatus
+        read_only_fields = ("swimlane", "status")
 
 
 class UserStoryDueDateValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
@@ -253,7 +254,8 @@ class _MemberBulkValidator(validators.Validator):
             # If the validation comes from a request let's check the user is a valid contact
             request = self.context.get("request", None)
             if request is not None and request.user.is_authenticated:
-                valid_usernames = set(request.user.contacts_visible_by_user(request.user).values_list("username", flat=True))
+                all_usernames = request.user.contacts_visible_by_user(request.user).values_list("username", flat=True)
+                valid_usernames = set(all_usernames)
                 if username not in valid_usernames:
                     raise ValidationError(_("The user must be a valid contact"))
 
@@ -324,7 +326,7 @@ class UpdateProjectOrderBulkValidator(ProjectExistsValidator, validators.Validat
 
 
 class DuplicateProjectMemberValidator(validators.Validator):
-    id = serializers.CharField()
+    id = serializers.IntegerField()
 
 
 class DuplicateProjectValidator(validators.Validator):
