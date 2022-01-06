@@ -1,4 +1,5 @@
-# Copyright (C) 2014-2019 Taiga Agile LLC
+#
+# Copyright (C) 2014-present Taiga Agile LLC
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -20,7 +21,7 @@ from taiga.permissions.permissions import CommentAndOrUpdatePerm
 
 
 class IssuePermission(TaigaResourcePermission):
-    enought_perms = IsProjectAdmin() | IsSuperUser()
+    enough_perms = IsProjectAdmin() | IsSuperUser()
     global_perms = None
     retrieve_perms = HasProjectPerm('view_issues')
     create_perms = HasProjectPerm('add_issue')
@@ -41,14 +42,14 @@ class IssuePermission(TaigaResourcePermission):
 
 
 class IssueVotersPermission(TaigaResourcePermission):
-    enought_perms = IsProjectAdmin() | IsSuperUser()
+    enough_perms = IsProjectAdmin() | IsSuperUser()
     global_perms = None
     retrieve_perms = HasProjectPerm('view_issues')
     list_perms = HasProjectPerm('view_issues')
 
 
 class IssueWatchersPermission(TaigaResourcePermission):
-    enought_perms = IsProjectAdmin() | IsSuperUser()
+    enough_perms = IsProjectAdmin() | IsSuperUser()
     global_perms = None
     retrieve_perms = HasProjectPerm('view_issues')
     list_perms = HasProjectPerm('view_issues')

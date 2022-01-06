@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -137,6 +134,29 @@ def attach_epic_statuses(queryset, as_field="epic_statuses_attr"):
                     )
                FROM projects_epicstatus
               WHERE projects_epicstatus.project_id = {tbl}.id
+          """
+
+    sql = sql.format(tbl=model._meta.db_table)
+    queryset = queryset.extra(select={as_field: sql})
+    return queryset
+
+
+def attach_swimlanes(queryset, as_field="swimlanes_attr"):
+    """Attach a json swimlanes representation to each object of the queryset.
+
+    :param queryset: A Django projects queryset object.
+    :param as_field: Attach the swimalne as an attribute with this name.
+
+    :return: Queryset object with the additional `as_field` field.
+    """
+    model = queryset.model
+    sql = """
+             SELECT json_agg(
+                        row_to_json(projects_swimlane)
+                        ORDER BY projects_swimlane.order
+                    )
+               FROM projects_swimlane
+              WHERE projects_swimlane.project_id = {tbl}.id
           """
 
     sql = sql.format(tbl=model._meta.db_table)
@@ -622,6 +642,7 @@ def attach_extra_info(queryset, user=None):
     queryset = attach_closed_milestones(queryset)
     queryset = attach_notify_policies(queryset)
     queryset = attach_epic_statuses(queryset)
+    queryset = attach_swimlanes(queryset)
     queryset = attach_userstory_statuses(queryset)
     queryset = attach_userstory_duedates(queryset)
     queryset = attach_points(queryset)

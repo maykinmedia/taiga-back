@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -428,7 +426,7 @@ def test_milestone_import_duplicated_milestone(client):
     response = client.json.post(url, json.dumps(data))
     response = client.json.post(url, json.dumps(data))
     assert response.status_code == 400
-    assert response.data["milestones"][0]["name"][0] == "Name duplicated for the project"
+    assert response.data["milestones"][0]["name"][0] == "Duplicated name"
 
 
 
@@ -1030,7 +1028,7 @@ def test_valid_wiki_link_import(client):
 
     response = client.json.post(url, json.dumps(data))
     assert response.status_code == 201
-    response.data
+    response.data  # TODO: Assert against expectation
 
 
 ##################################################################

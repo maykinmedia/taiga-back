@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -112,6 +110,8 @@ class TrelloImporter:
 
             if project['prefs']['permissionLevel'] == "org":
                 if 'organization' not in project:
+                    is_private = True
+                elif 'prefs' not in project['organization']:
                     is_private = True
                 elif project['organization']['prefs']['permissionLevel'] == "private":
                     is_private = True

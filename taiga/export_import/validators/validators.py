@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -107,6 +105,22 @@ class SeverityExportValidator(validators.ModelValidator):
 class IssueTypeExportValidator(validators.ModelValidator):
     class Meta:
         model = projects_models.IssueType
+        exclude = ('id', 'project')
+
+
+class SwimlaneUserStoryStatusExportValidator(validators.ModelValidator):
+    status = ProjectRelatedField(slug_field="name")
+
+    class Meta:
+        model = projects_models.SwimlaneUserStoryStatus
+        exclude = ('id', 'swimlane')
+
+
+class SwimlaneExportValidator(validators.ModelValidator):
+    statuses = SwimlaneUserStoryStatusExportValidator(many=True, required=False)
+
+    class Meta:
+        model = projects_models.Swimlane
         exclude = ('id', 'project')
 
 
@@ -260,7 +274,7 @@ class MilestoneExportValidator(WatcheableObjectModelValidatorMixin):
         name = attrs[source]
         qs = self.project.milestones.filter(name=name)
         if qs.exists():
-            raise ValidationError(_("Name duplicated for the project"))
+            raise ValidationError(_("Duplicated name"))
 
         return attrs
 
@@ -334,6 +348,7 @@ class UserStoryExportValidator(WatcheableObjectModelValidatorMixin):
     assigned_to = UserRelatedField(required=False)
     assigned_users = UserRelatedField(many=True, required=False)
     status = ProjectRelatedField(slug_field="name")
+    swimlane = ProjectRelatedField(slug_field="name", required=False)
     milestone = ProjectRelatedField(slug_field="name", required=False)
     modified_date = serializers.DateTimeField(required=False)
     generated_from_issue = ProjectRelatedField(slug_field="ref", required=False)
@@ -413,6 +428,7 @@ class ProjectExportValidator(WatcheableObjectModelValidatorMixin):
     issue_statuses = IssueStatusExportValidator(many=True, required=False)
     priorities = PriorityExportValidator(many=True, required=False)
     severities = SeverityExportValidator(many=True, required=False)
+    swimlanes = SwimlaneExportValidator(many=True, required=False)
     tags_colors = JSONField(required=False)
     creation_template = serializers.SlugRelatedField(slug_field="slug", required=False)
     default_points = serializers.SlugRelatedField(slug_field="name", required=False)
@@ -422,6 +438,7 @@ class ProjectExportValidator(WatcheableObjectModelValidatorMixin):
     default_severity = serializers.SlugRelatedField(slug_field="name", required=False)
     default_issue_status = serializers.SlugRelatedField(slug_field="name", required=False)
     default_issue_type = serializers.SlugRelatedField(slug_field="name", required=False)
+    default_swimlane = serializers.SlugRelatedField(slug_field="name", required=False)
     userstorycustomattributes = UserStoryCustomAttributeExportValidator(many=True, required=False)
     taskcustomattributes = TaskCustomAttributeExportValidator(many=True, required=False)
     issuecustomattributes = IssueCustomAttributeExportValidator(many=True, required=False)

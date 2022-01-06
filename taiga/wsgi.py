@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -38,7 +36,7 @@ import os
 # if running multiple sites in the same mod_wsgi process. To fix this, use
 # mod_wsgi daemon mode with each site in its own daemon process, or use
 # os.environ["DJANGO_SETTINGS_MODULE"] = "taiga.settings"
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings.common")
 
 # This application object is used by any WSGI server configured to use this
 # file. This includes Django's development server, if the WSGI_APPLICATION

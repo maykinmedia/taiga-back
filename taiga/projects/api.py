@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -31,7 +29,7 @@ from django_pglocks import advisory_lock
 from taiga.base import filters
 from taiga.base import exceptions as exc
 from taiga.base import response
-from taiga.base.api import ModelCrudViewSet, ModelListViewSet
+from taiga.base.api import ModelCrudViewSet, ModelListViewSet, ModelUpdateRetrieveViewSet
 from taiga.base.api.mixins import BlockedByProjectMixin, BlockeableSaveMixin, BlockeableDeleteMixin
 from taiga.base.api.permissions import AllowAnyPermission
 from taiga.base.api.utils import get_object_or_404
@@ -49,11 +47,13 @@ from taiga.projects.likes.mixins.viewsets import LikedResourceMixin, FansViewSet
 from taiga.projects.notifications.apps import signal_members_added
 from taiga.projects.notifications.mixins import WatchersViewSetMixin
 from taiga.projects.notifications.choices import NotifyLevel
-from taiga.projects.mixins.on_destroy import MoveOnDestroyMixin
+from taiga.projects.mixins.on_destroy import MoveOnDestroyMixin, MoveOnDestroySwimlaneMixin
 from taiga.projects.mixins.ordering import BulkUpdateOrderMixin
+from taiga.projects.signals import issue_status_post_move_on_destroy as issue_status_post_move_on_destroy_signal
 from taiga.projects.tasks.models import Task
 from taiga.projects.tagging.api import TagsColorsResourceMixin
 from taiga.projects.userstories.models import UserStory, RolePoints
+from taiga.projects.userstories.services import reset_userstories_kanban_order_in_bulk
 from taiga.users import services as users_services
 
 from . import filters as project_filters
@@ -519,8 +519,8 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin,
             obj.template = self.request.QUERY_PARAMS.get('template', None)
 
         if not obj.id or self.get_object().is_private != obj.is_private:
-            # Validate if the owner have enought slots to create the project
-            # or if you are changing the privacity
+            # Validate if the owner have enough slots to create the project
+            # or if you are changing the privacy
             (can_create_or_update, error_message) = services.check_if_project_can_be_created_or_updated(obj)
             if not can_create_or_update:
                 members = max(obj.memberships.count(), 1)
@@ -619,6 +619,12 @@ class UserStoryStatusViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
         with advisory_lock("epic-user-story-status-creation-{}".format(project_id)):
             return super().create(request, *args, **kwargs)
 
+    def move_on_destroy_reorder_after_moved(self, moved_to_obj, moved_objs_queryset):
+        project = moved_to_obj.project
+        bulk_userstories_ids = (moved_objs_queryset.order_by('swimlane__order', 'kanban_order')
+                                                   .values_list('id', flat=True))
+        reset_userstories_kanban_order_in_bulk(project, bulk_userstories_ids)
+
 
 class PointsViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
                     ModelCrudViewSet, BulkUpdateOrderMixin):
@@ -640,6 +646,52 @@ class PointsViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
         project_id = request.DATA.get("project", 0)
         with advisory_lock("points-creation-{}".format(project_id)):
             return super().create(request, *args, **kwargs)
+
+
+class SwimlaneViewSet(MoveOnDestroySwimlaneMixin, BlockedByProjectMixin,
+                      ModelCrudViewSet, BulkUpdateOrderMixin):
+
+    model = models.Swimlane
+    serializer_class = serializers.SwimlaneSerializer
+    validator_class = validators.SwimlaneValidator
+    permission_classes = (permissions.SwimlanePermission,)
+    filter_backends = (filters.CanViewProjectFilterBackend,)
+    filter_fields = ('project',)
+    bulk_update_param = "bulk_swimlanes"
+    bulk_update_perm = "change_swimlanes"
+    bulk_update_order_action = services.bulk_update_swimlane_order
+
+    def create(self, request, *args, **kwargs):
+        project_id = request.DATA.get("project", 0)
+        with advisory_lock("swimlane-creation-{}".format(project_id)):
+            return super().create(request, *args, **kwargs)
+
+    def post_save(self, object, created=False):
+        super().post_save(object, created=created)
+
+        if not created:
+            return
+
+        # If it's a creation and it's the first and only swimlane,
+        # then assign all Userstories to this new swimlane
+        total_swimlanes = object.project.swimlanes.count()
+        if total_swimlanes == 1:
+            uss = object.project.user_stories.all()
+            uss.update(swimlane=object)
+
+    def pre_delete(self, obj):
+        if obj.project.default_swimlane_id == obj.id and obj.project.swimlanes.count() > 1:
+            raise exc.BadRequest(_("The default swimlane cannot be deleted."))
+
+
+class SwimlaneUserStoryStatusViewSet(BlockedByProjectMixin, ModelListViewSet, ModelUpdateRetrieveViewSet):
+    model = models.SwimlaneUserStoryStatus
+    serializer_class = serializers.SwimlaneUserStoryStatusSerializer
+    validator_class = validators.SwimlaneUserStoryStatusValidator
+    permission_classes = (permissions.SwimlaneUserStoryStatusPermission,)
+    filter_backends = (filters.custom_filter_class(filters.CanViewProjectFilterBackend,
+                                                   project_query_param="status__project"),)
+    filter_fields = ('project',)
 
 
 class UserStoryDueDateViewSet(BlockedByProjectMixin, ModelCrudViewSet):
@@ -851,6 +903,7 @@ class IssueStatusViewSet(MoveOnDestroyMixin, BlockedByProjectMixin,
     move_on_destroy_related_class = Issue
     move_on_destroy_related_field = "status"
     move_on_destroy_project_default_field = "default_issue_status"
+    move_on_destroy_post_destroy_signal = issue_status_post_move_on_destroy_signal
 
     def create(self, request, *args, **kwargs):
         project_id = request.DATA.get("project", 0)
@@ -1093,4 +1146,4 @@ class InvitationViewSet(ModelListViewSet):
     permission_classes = (AllowAnyPermission,)
 
     def list(self, *args, **kwargs):
-        raise exc.PermissionDenied(_("You don't have permisions to see that."))
+        raise exc.PermissionDenied(_("You don't have permissions to see that."))

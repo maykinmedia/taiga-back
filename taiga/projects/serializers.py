@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -75,6 +73,41 @@ class PointsSerializer(serializers.LightSerializer):
     order = Field()
     value = Field()
     project = Field(attr="project_id")
+
+
+class _SwimlaneStatusSerializer(serializers.LightSerializer):
+    id = MethodField()
+    name = MethodField()
+    slug = MethodField()
+    order = MethodField()
+    is_closed = MethodField()
+    is_archived = MethodField()
+    color = MethodField()
+    wip_limit = Field()
+    swimlane_userstory_status_id = Field(attr="id")
+
+    def get_id(self, obj): return obj.status.id
+    def get_name(self, obj): return _(obj.status.name)
+    def get_slug(self, obj): return obj.status.slug
+    def get_order(self, obj): return obj.status.order
+    def get_is_closed(self, obj): return obj.status.is_closed
+    def get_is_archived(self, obj): return obj.status.is_archived
+    def get_color(self, obj): return obj.status.color
+
+
+class SwimlaneSerializer(serializers.LightSerializer):
+    id = Field()
+    name = I18NField()
+    order = Field()
+    project = Field(attr="project_id")
+    statuses = _SwimlaneStatusSerializer(many=True, attr="statuses.all", call=True)
+
+
+class SwimlaneUserStoryStatusSerializer(serializers.LightSerializer):
+    id = Field()
+    status = Field(attr="status_id")
+    swimlane = Field(attr="swimlane_id")
+    wip_limit = Field()
 
 
 class UserStoryDueDateSerializer(BaseDueDateSerializer):
@@ -272,6 +305,7 @@ class ProjectSerializer(serializers.LightSerializer):
     default_severity = Field(attr="default_severity_id")
     default_issue_status = Field(attr="default_issue_status_id")
     default_issue_type = Field(attr="default_issue_type_id")
+    default_swimlane = Field(attr="default_swimlane_id")
 
     my_permissions = MethodField()
 
@@ -386,6 +420,7 @@ class ProjectSerializer(serializers.LightSerializer):
 
 class ProjectDetailSerializer(ProjectSerializer):
     epic_statuses = Field(attr="epic_statuses_attr")
+    swimlanes = Field(attr="swimlanes_attr")
     us_statuses = Field(attr="userstory_statuses_attr")
     us_duedates = Field(attr="userstory_duedates_attr")
     points = Field(attr="points_attr")
@@ -432,7 +467,8 @@ class ProjectDetailSerializer(ProjectSerializer):
                      "severities_attr", "epic_custom_attributes_attr",
                      "userstory_custom_attributes_attr",
                      "task_custom_attributes_attr",
-                     "issue_custom_attributes_attr", "roles_attr"]:
+                     "issue_custom_attributes_attr", "roles_attr",
+                     "swimlanes_attr"]:
 
             assert hasattr(instance, attr), "instance must have a {} attribute".format(attr)
             val = getattr(instance, attr)
@@ -490,7 +526,7 @@ class ProjectDetailSerializer(ProjectSerializer):
                                                                   "owner_attr attribute")
         assert hasattr(obj, "public_projects_same_owner_attr"), ("instance must have a public_projects_same"
                                                                  "_owner_attr attribute")
-        return services.check_if_project_privacity_can_be_changed(
+        return services.check_if_project_privacy_can_be_changed(
             obj,
             current_memberships=self.get_total_memberships(obj),
             current_private_projects=obj.private_projects_same_owner_attr,
@@ -549,6 +585,7 @@ class ProjectLightSerializer(serializers.LightSerializer):
     default_severity = Field(attr="default_severity_id")
     default_issue_status = Field(attr="default_issue_status_id")
     default_issue_type = Field(attr="default_issue_type_id")
+    default_swimlane = Field(attr="default_swimlane_id")
 
     my_permissions = MethodField()
 

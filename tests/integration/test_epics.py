@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -111,6 +108,62 @@ def test_bulk_create_related_userstories(client):
     response = client.json.post(url, json.dumps(data))
     assert response.status_code == 200
     assert len(response.data) == 2
+
+
+def test_bulk_create_related_userstories_with_default_swimlane_and_kanban_enable(client):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user)
+    f.MembershipFactory.create(project=project, user=user, is_admin=True)
+    swimlane = f.SwimlaneFactory.create(project=project)
+    swimlane2 = f.SwimlaneFactory.create(project=project)
+    epic = f.EpicFactory.create(project=project)
+
+    project.default_swimlane = swimlane
+    project.is_kanban_activated = True
+    project.save()
+
+    url = reverse('epics-related-userstories-bulk-create', args=[epic.pk])
+
+    data = {
+        "bulk_userstories": "test1\ntest2",
+        "project_id": project.id
+    }
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    assert len(response.data) == 2
+
+    userstories = epic.user_stories.all()
+    assert userstories[0].swimlane == swimlane
+    assert userstories[1].swimlane == swimlane
+
+
+def test_bulk_create_related_userstories_with_default_swimlane_and_kanban_disable(client):
+    user = f.UserFactory.create()
+    project = f.ProjectFactory.create(owner=user)
+    f.MembershipFactory.create(project=project, user=user, is_admin=True)
+    swimlane = f.SwimlaneFactory.create(project=project)
+    swimlane2 = f.SwimlaneFactory.create(project=project)
+    epic = f.EpicFactory.create(project=project)
+
+    project.default_swimlane = swimlane
+    project.is_kanban_activated = False
+    project.save()
+
+    url = reverse('epics-related-userstories-bulk-create', args=[epic.pk])
+
+    data = {
+        "bulk_userstories": "test1\ntest2",
+        "project_id": project.id
+    }
+    client.login(user)
+    response = client.json.post(url, json.dumps(data))
+    assert response.status_code == 200
+    assert len(response.data) == 2
+
+    userstories = epic.user_stories.all()
+    assert userstories[0].swimlane == None
+    assert userstories[1].swimlane == None
 
 
 def test_set_related_userstory(client):

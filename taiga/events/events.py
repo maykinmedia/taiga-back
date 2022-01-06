@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -56,9 +54,14 @@ def emit_event_for_model(obj, *, type:str="change", channel:str="events",
                          content_type:str=None, sessionid:str=None):
     """
     Sends a model change event.
+
+        type: create | change | delete
     """
 
-    if obj._importing:
+    if hasattr(obj, "_importing") and obj._importing:
+        return None
+
+    if hasattr(obj, "_excluded_events") and type in obj.excluded_events:
         return None
 
     assert type in set(["create", "change", "delete"])

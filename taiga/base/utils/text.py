@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -19,14 +17,10 @@
 
 def strip_lines(text):
     """
-    Given text, try remove unnecesary spaces and
+    Given text, try remove unnecessary spaces and
     put text in one unique line.
     """
-    output = text.replace("\r\n", " ")
-    output = output.replace("\r", " ")
-    output = output.replace("\n", " ")
-
-    return output.strip()
+    return text.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").strip()
 
 
 def split_in_lines(text):

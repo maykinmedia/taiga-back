@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -78,7 +75,8 @@ def test_ok_signature(client):
                            data,
                            content_type="application/json",
                            HTTP_X_EVENT_KEY="repo:push",
-                           REMOTE_ADDR=settings.BITBUCKET_VALID_ORIGIN_IPS[0])
+                           REMOTE_ADDR="13.52.5.96")
+
     assert response.status_code == 204
 
 
@@ -97,7 +95,7 @@ def test_ok_signature_ip_in_network(client):
                            data,
                            content_type="application/json",
                            HTTP_X_EVENT_KEY="repo:push",
-                           REMOTE_ADDR="104.192.143.193")
+                           REMOTE_ADDR="13.52.5.96")
     assert response.status_code == 204
 
 
@@ -138,7 +136,7 @@ def test_blocked_project(client):
                            data,
                            content_type="application/json",
                            HTTP_X_EVENT_KEY="repo:push",
-                           REMOTE_ADDR=settings.BITBUCKET_VALID_ORIGIN_IPS[0])
+                           REMOTE_ADDR="13.52.5.96")
 
     assert response.status_code == 451
 

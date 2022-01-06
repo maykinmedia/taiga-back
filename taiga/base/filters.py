@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -158,6 +156,7 @@ class FilterModelAssignedUsers:
 
 class PermissionBasedFilterBackend(FilterBackend):
     permission = None
+    project_query_param = "project"
 
     def filter_queryset(self, request, queryset, view):
         project_id = None
@@ -186,12 +185,28 @@ class PermissionBasedFilterBackend(FilterBackend):
 
             projects_list = [membership.project_id for membership in memberships_qs]
 
-            qs = qs.filter(Q(project_id__in=projects_list) |
-                           Q(project__public_permissions__contains=[self.permission]))
+            qs = qs.filter(Q(**{f"{self.project_query_param}_id__in": projects_list}) |
+                           Q(**{f"{self.project_query_param}__public_permissions__contains": [self.permission]}))
         else:
-            qs = qs.filter(project__anon_permissions__contains=[self.permission])
+            qs = qs.filter(**{f"{self.project_query_param}__anon_permissions__contains": [self.permission]})
 
         return super().filter_queryset(request, qs, view)
+
+
+def custom_filter_class(base_class, **kwargs):
+    """
+    This function is useful to create custom filter classes based on other classes.
+
+    For exmaple:
+
+        class CanViewProjectFilterBackend(PermissionBasedFilterBackend):
+            permission = "view_project"
+
+    is the same as:
+
+        custom_filter_class(PermissionBasedFilterBackend, {permission: "view_project"})
+    """
+    return type(f"{base_class.__name__}_customized", (base_class,), kwargs)
 
 
 class CanViewProjectFilterBackend(PermissionBasedFilterBackend):
@@ -388,7 +403,7 @@ class BaseRelatedFieldsFilter(FilterBackend):
             self.param_name = param_name
 
         if exclude_param_name:
-            self.exclude_param_name
+            self.exclude_param_name = exclude_param_name
 
     def _prepare_filter_data(self, query_param_value):
         def _transform_value(value):
@@ -533,6 +548,11 @@ class PrioritiesFilter(BaseRelatedFieldsFilter):
 class SeveritiesFilter(BaseRelatedFieldsFilter):
     filter_name = 'severity'
     exclude_param_name = 'exclude_severity'
+
+
+class SwimlanesFilter(BaseRelatedFieldsFilter):
+    filter_name = 'swimlane'
+    exclude_param_name = 'exclude_swimlane'
 
 
 class TagsFilter(FilterBackend):

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -24,7 +22,7 @@ from taiga.permissions.permissions import CommentAndOrUpdatePerm
 
 
 class WikiPagePermission(TaigaResourcePermission):
-    enought_perms = IsProjectAdmin() | IsSuperUser()
+    enough_perms = IsProjectAdmin() | IsSuperUser()
     global_perms = None
     retrieve_perms = HasProjectPerm('view_wiki_pages')
     by_slug_perms = HasProjectPerm('view_wiki_pages')
@@ -39,14 +37,14 @@ class WikiPagePermission(TaigaResourcePermission):
 
 
 class WikiPageWatchersPermission(TaigaResourcePermission):
-    enought_perms = IsProjectAdmin() | IsSuperUser()
+    enough_perms = IsProjectAdmin() | IsSuperUser()
     global_perms = None
     retrieve_perms = HasProjectPerm('view_wiki_pages')
     list_perms = HasProjectPerm('view_wiki_pages')
 
 
 class WikiLinkPermission(TaigaResourcePermission):
-    enought_perms = IsProjectAdmin() | IsSuperUser()
+    enough_perms = IsProjectAdmin() | IsSuperUser()
     global_perms = None
     retrieve_perms = HasProjectPerm('view_wiki_links')
     create_perms = HasProjectPerm('add_wiki_link')

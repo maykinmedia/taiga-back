@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -178,7 +176,7 @@ class UsersViewSet(ModelCrudViewSet):
         email = mail_builder.password_recovery(user, {"user": user})
         email.send()
 
-        return response.Ok({"detail": _("Mail sended successful!")})
+        return response.Ok({"detail": _("Mail sent successfully!")})
 
     @list_route(methods=["POST"])
     def change_password_from_recovery(self, request, pk=None):
@@ -190,7 +188,7 @@ class UsersViewSet(ModelCrudViewSet):
 
         validator = validators.RecoveryValidator(data=request.DATA, many=False)
         if not validator.is_valid():
-            raise exc.WrongArguments(_("Token is invalid"))
+            return response.BadRequest(validator.errors)
 
         try:
             user = models.User.objects.get(token=validator.data["token"])
@@ -213,7 +211,7 @@ class UsersViewSet(ModelCrudViewSet):
         current_password = request.DATA.get("current_password")
         password = request.DATA.get("password")
 
-        # NOTE: GitHub users have no password yet (request.user.passwor == '') so
+        # NOTE: GitHub users have no password yet (request.user.password == '') so
         #       current_password can be None
         if not current_password and request.user.password:
             raise exc.WrongArguments(_("Current password parameter needed"))
@@ -222,7 +220,7 @@ class UsersViewSet(ModelCrudViewSet):
             raise exc.WrongArguments(_("New password parameter needed"))
 
         if len(password) < 6:
-            raise exc.WrongArguments(_("Invalid password length at least 6 charaters needed"))
+            raise exc.WrongArguments(_("Invalid password length at least 6 characters needed"))
 
         if current_password and not request.user.check_password(current_password):
             raise exc.WrongArguments(_("Invalid current password"))
@@ -272,8 +270,7 @@ class UsersViewSet(ModelCrudViewSet):
         """
         validator = validators.ChangeEmailValidator(data=request.DATA, many=False)
         if not validator.is_valid():
-            raise exc.WrongArguments(_("Invalid, are you sure the token is correct and you "
-                                       "didn't use it before?"))
+            return response.BadRequest(validator.errors)
 
         try:
             user = models.User.objects.get(email_token=validator.data["email_token"])

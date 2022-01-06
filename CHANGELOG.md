@@ -1,25 +1,96 @@
 # Changelog
 
-## Unreleased
+## 6.0.10 (unreleased)
+
+- ...
+
+## 6.0.9 (2021-04-13)
+
+- Migrated to weblate and new translations
+- Update dependencies
+
+## 6.0.8 (2021-04-13)
+
+- Improve docker configuration
+- fix(userstories): close or open userstories afte they are moved in bulk in kanban
+
+## 6.0.7 (2021-03-09)
+
+- fix(email): catch smtp errors to prevent app crashes
+
+## 6.0.6 (2021-03-01)
+
+- Fix api message
+
+## 6.0.5 (2021-02-22)
+
+- Added translation to Dansk
+- Added translation to Serbian
+- Added translation to Vietnamese
+- Simplify and improve docker configuration
+- Improve Github integration (edit, close and reopen issue events)
+- Fix Asana importer
+
+## 6.0.4 (2021-02-15)
+
+### Misc
+
+- Fix importer: ignore epic related user stories from another project
+- Change default sitemap page size
+- Improve docker configuration
+
+## 6.0.3 (2020-02-08)
+
+### Misc
+
+- Fix: ENABLE_WEBHOOKS for docker images
+
+## 6.0.2 (2020-02-08)
+
+### Features
+
+- Update colors for default project template fixtures.
+
+### Misc
+
+- Minor fixes related to importers and integrations.
+
+## 6.0.1 (2020-02-02)
+
+### Misc
+
+- Fix 'create user' form in django admin panel.
+
+## 6.0.0 (2020-02-02)
+
+### Features
+
+- Swimlanes
+- Generate docker image
+- Revamp email design
+- Improve Gitlab integration (edit, close and reopen issue events)
+
+### Misc
+
+- Changed the configuration style to expect DJANGO_SETTINGS_MODULE
+- Improved performance when reordering
+- Updated dependencies
 
 ## 5.5.9 (2020-12-21)
 
 ### Fix
 
 - Fix attachment refresh feature.
-
 - Fix welcome email template layout.
 
 ### Misc
 
 - Updated requirements. **Please note that Python 3.5 is not supported**.
-
 - Several minor changes.
 
 ### i18n
 
 - Add Arabic.
-
 - Update Russian.
 
 ## 5.5.7 (2020-11-11)
@@ -27,7 +98,6 @@
 ### Misc
 
 - Upgrade requirements.
-
 - Fix deprecation warnings.
 
 ## 5.5.5 (2020-09-16)
@@ -39,7 +109,6 @@
 ### i18n
 
 - Update catalog.
-
 - Update fa.
 
 ## 5.5.4 (2020-09-08)
@@ -57,7 +126,6 @@
 ### Misc
 
 - Parametrize mdrender cache options.
-
 - Minor bug fix.
 
 ## 5.5.2 (2020-08-26)
@@ -77,14 +145,12 @@
 ### Features
 
 - Verify user email.
-
 - Task promotion creates user story and deletes original task.
 
 ### Misc
 
 - Upgraded Django version to 2.2. This is a BREAKING CHANGE. Contributed
   modules should be upgraded.
-
 - Several minor bugfixes.
 
 ## 5.0.15 (2020-06-17)
@@ -104,13 +170,11 @@
 ### Features
 
 - Resolved Django deprecation warnings to prepare for an upgrade.
-
 - Added option to disallow anonymous access to user profiles.
 
 ### Misc
 
 - Updated requirements.
-
 - Use pip-tools to manage dependencies.
 
 ### i18n
@@ -129,7 +193,6 @@
 ### Misc
 
 - Fixed several minor bugs.
-
 - Updated requirements.
 
 ### i18n
@@ -145,7 +208,6 @@
 ### Misc
 
 - Fixed several minor bugs.
-
 - Updated requirements.
 
 ### i18n
@@ -167,7 +229,6 @@
 ### Feature
 
 - Add reduce notifications configuration option.
-
 - Sanitize full name input.
 
 ### i18n
@@ -197,9 +258,7 @@
 ## 5.0.0 (2019-11-13)
 
 - Refresh attachment URL on markdown fields to support protected backend.
-
 - Update requirements.
-
 - Update translations: Persian (Iran), French, Portuguese (Brazil).
 
 ## 4.2.14 (2019-10-01)
@@ -207,7 +266,6 @@
 - Update requirements to support python3.7. This is a potentially BREAKING
   CHANGE. Several libraries were updated to minor and patch releases.
   Contributed modules should be tested thoroughly.
-
 - Minor bug fixes.
 
 ## 4.2.12 (2019-08-06)
@@ -418,7 +476,6 @@
 ### Misc
 
 - Minor bug fix related with project import.
-
 - Pin requirements to solve incompatible versions detected by pip 10.
 
 ## 3.3.4 (2018-05-24)

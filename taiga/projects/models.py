@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -161,6 +159,10 @@ class ProjectDefaults(models.Model):
                                               on_delete=models.SET_NULL, related_name="+",
                                               null=True, blank=True,
                                               verbose_name=_("default issue type"))
+    default_swimlane = models.OneToOneField("projects.Swimlane",
+                                            on_delete=models.SET_NULL, related_name="+",
+                                            null=True, blank=True,
+                                            verbose_name=_("default swimlane"))
 
     class Meta:
         abstract = True
@@ -421,7 +423,7 @@ class Project(ProjectDefaults, TaggedMixin, TagsColorsMixin, models.Model):
         user_model = get_user_model()
         members = self.memberships.all()
         if with_admin_privileges is not None:
-            members = members.filter(Q(is_admin=True)|Q(user__id=self.owner.id))
+            members = members.filter(Q(is_admin=True) | Q(user__id=self.owner.id))
         members = members.values_list("user", flat=True)
         return user_model.objects.filter(id__in=list(members))
 
@@ -506,7 +508,7 @@ class Project(ProjectDefaults, TaggedMixin, TagsColorsMixin, models.Model):
         from taiga.events.apps import (connect_events_signals,
                                        disconnect_events_signals)
         from taiga.projects.epics.apps import (connect_all_epics_signals,
-                                             disconnect_all_epics_signals)
+                                               disconnect_all_epics_signals)
         from taiga.projects.tasks.apps import (connect_all_tasks_signals,
                                                disconnect_all_tasks_signals)
         from taiga.projects.userstories.apps import (connect_all_userstories_signals,
@@ -620,6 +622,8 @@ class UserStoryStatus(models.Model):
         on_delete=models.CASCADE,
     )
 
+    _importing = None
+
     class Meta:
         verbose_name = "user story status"
         verbose_name_plural = "user story statuses"
@@ -670,11 +674,11 @@ class UserStoryDueDate(models.Model):
     order = models.IntegerField(default=10, null=False, blank=False,
                                 verbose_name=_("order"))
     by_default = models.BooleanField(default=False, null=False, blank=True,
-                                    verbose_name=_("by default"))
+                                     verbose_name=_("by default"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
     days_to_due = models.IntegerField(null=True, blank=True, default=None,
-                                    verbose_name=_("days to due"))
+                                      verbose_name=_("days to due"))
     project = models.ForeignKey(
         "Project",
         null=False,
@@ -739,11 +743,11 @@ class TaskDueDate(models.Model):
     order = models.IntegerField(default=10, null=False, blank=False,
                                 verbose_name=_("order"))
     by_default = models.BooleanField(default=False, null=False, blank=True,
-                                    verbose_name=_("by default"))
+                                     verbose_name=_("by default"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
     days_to_due = models.IntegerField(null=True, blank=True, default=None,
-                                    verbose_name=_("days to due"))
+                                      verbose_name=_("days to due"))
     project = models.ForeignKey(
         "Project",
         null=False,
@@ -887,18 +891,18 @@ class IssueDueDate(models.Model):
     order = models.IntegerField(default=10, null=False, blank=False,
                                 verbose_name=_("order"))
     by_default = models.BooleanField(default=False, null=False, blank=True,
-                                    verbose_name=_("by default"))
+                                     verbose_name=_("by default"))
     color = models.CharField(max_length=20, null=False, blank=False, default="#999999",
                              verbose_name=_("color"))
     days_to_due = models.IntegerField(null=True, blank=True, default=None,
-                                    verbose_name=_("days to due"))
+                                      verbose_name=_("days to due"))
     project = models.ForeignKey(
         "Project",
         null=False,
         blank=False,
         related_name="issue_duedates",
         verbose_name=_("project"),
-         on_delete=models.CASCADE,
+        on_delete=models.CASCADE,
     )
 
     class Meta:
@@ -909,6 +913,77 @@ class IssueDueDate(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Swimlane(models.Model):
+    project = models.ForeignKey(
+        "projects.Project",
+        null=False,
+        blank=False,
+        related_name="swimlanes",
+        verbose_name=_("project"),
+        on_delete=models.CASCADE,
+    )
+    name = models.TextField(null=False, blank=False,
+                            verbose_name=_("name"))
+    order = models.BigIntegerField(null=False, blank=False, default=timestamp_ms,
+                                   verbose_name=_("order"))
+
+    _importing = None
+
+    class Meta:
+        verbose_name = "swimlane"
+        verbose_name_plural = "swimlanes"
+        ordering = ["project", "order", "name"]
+        unique_together = ("project", "name")
+
+    def __str__(self):
+        return self.name
+
+
+class SwimlaneUserStoryStatus(models.Model):
+    wip_limit = models.IntegerField(null=True, blank=True, default=None,
+                                    verbose_name=_("work in progress limit"))
+    status = models.ForeignKey(
+        "projects.UserStoryStatus",
+        null=False,
+        blank=False,
+        on_delete=models.CASCADE,
+        related_name="swimlane_statuses",
+        verbose_name=_("user story status"),
+    )
+    swimlane = models.ForeignKey(
+        "projects.Swimlane",
+        null=False,
+        blank=False,
+        on_delete=models.CASCADE,
+        related_name="statuses",
+        verbose_name=_("status"),
+    )
+
+    exluded_events = ["create", "delete"]
+
+    _importing = None
+
+    class Meta:
+        verbose_name = "swimlane user story status"
+        verbose_name_plural = "swimlane user story statuses"
+        ordering = ["swimlane", "status", "id"]
+        unique_together = (("swimlane", "status"))
+
+    def __str__(self):
+        return f"{self.swimlane.name} - {self.status.name}"
+
+    def __repr__(self):
+        return "<Swimlane User Story Status {{swimlane: {self.swimlane.name}, status: {self.status.name}}}>"
+
+    @property
+    def project(self):
+        return self.status.project
+
+    @property
+    def project_id(self):
+        return self.status.project_id
 
 
 class ProjectTemplate(TaggedMixin, TagsColorsMixin, models.Model):

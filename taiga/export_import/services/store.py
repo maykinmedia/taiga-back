@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -42,6 +40,8 @@ from taiga.users import services as users_service
 from .. import exceptions as err
 from .. import validators
 
+import logging
+logger = logging.getLogger('taiga.export_import')
 
 ########################################################################
 ## Manage errors
@@ -81,10 +81,10 @@ def store_project(data):
         excluded_fields = [
             "default_points", "default_us_status", "default_task_status",
             "default_priority", "default_severity", "default_issue_status",
-            "default_issue_type", "default_epic_status",
+            "default_issue_type", "default_epic_status", "default_swimlane",
             "memberships", "points",
             "epic_statuses", "us_statuses", "task_statuses", "issue_statuses",
-            "priorities", "severities",
+            "priorities", "severities", "swimlanes",
             "issue_types",
             "epiccustomattributes", "userstorycustomattributes",
             "taskcustomattributes", "issuecustomattributes",
@@ -245,12 +245,56 @@ def store_project_attributes_values(project, data, field, serializer):
     return result
 
 
+## SWIMLANES
+
+def _store_swimlane_userstory_status(project, swimlane, data):
+    validator = validators.SwimlaneUserStoryStatusExportValidator(data=data, context={"project": project})
+    if validator.is_valid():
+        validator.object.swimlane = swimlane
+        validator.save()
+        return validator.object
+
+    add_errors("statuses", validator.errors)
+    return None
+
+
+def store_swimlane(project, data):
+    swimlane_data = {key: value for key, value in data.items() if key not in ("statuses",)}
+
+    validator = validators.SwimlaneExportValidator(data=swimlane_data, context={"project": project})
+
+    if validator.is_valid():
+        validator.object.project = project
+        validator.object._importing = True
+
+        validator.save()
+
+        for status in data.get("statuses", []):
+            _store_swimlane_userstory_status(project, validator.object, status)
+
+        return validator
+
+    add_errors("swimlanes", validator.errors)
+    return None
+
+
+def store_swimlanes(project, data):
+    results = []
+    for swimlane_data in data.get("swimlanes", []):
+        results.append(store_swimlane(project, swimlane_data))
+    return results
+
+
 ## DEFAULT PROJECT ATTRIBUTES VALUES
 
 def store_default_project_attributes_values(project, data):
     def helper(project, field, related, data):
         if field in data:
-            value = related.all().get(name=data[field])
+            name = data[field]
+            if name:
+                value = related.all().get(name=name)
+            else:
+                value = None
         else:
             value = related.all().first()
         setattr(project, field, value)
@@ -262,6 +306,7 @@ def store_default_project_attributes_values(project, data):
     helper(project, "default_task_status", project.task_statuses, data)
     helper(project, "default_priority", project.priorities, data)
     helper(project, "default_severity", project.severities, data)
+    helper(project, "default_swimlane", project.swimlanes, data)
     project._importing = True
     project.save()
 
@@ -441,7 +486,14 @@ def store_epic(project, data):
     if "status" not in data and project.default_epic_status:
         data["status"] = project.default_epic_status.name
 
+    # Ignore external related user stories
+    data["related_user_stories"] = filter(
+       lambda x: x.get("source_project_slug", None) is None,
+       data.get("related_user_stories", [])
+    )
+
     validator = validators.EpicExportValidator(data=data, context={"project": project})
+
     if validator.is_valid():
         validator.object.project = project
         if validator.object.owner is None:
@@ -717,8 +769,15 @@ def _store_timeline_entry(project, timeline):
 
 
 def store_timeline_entries(project, data):
+    # Exclude epic.related_userstories entries if they are not from this project
+    timeline_items = filter(
+        lambda t: not(
+            (t.get("event_type", None) in ["epics.relateduserstory.create", "epics.relateduserstory.delete"]) and
+            (t.get("data", {}).get("userstory", {}).get("project", {}).get("slug", None) != project.slug)
+        ), data.get("timeline", []))
+
     results = []
-    for timeline in data.get("timeline", []):
+    for timeline in timeline_items:
         tl = _store_timeline_entry(project, timeline)
         results.append(tl)
     return results
@@ -729,7 +788,7 @@ def store_timeline_entries(project, data):
 #############################################
 
 
-def _validate_if_owner_have_enought_space_to_this_project(owner, data):
+def _validate_if_owner_have_enough_space_to_this_project(owner, data):
     # Validate if the owner can have this project
     data["owner"] = owner.email
 
@@ -801,6 +860,7 @@ def _populate_project_object(project, data):
     store_project_attributes_values(project, data, "us_duedates", validators.UserStoryDueDateExportValidator)
     store_project_attributes_values(project, data, "task_duedates", validators.TaskDueDateExportValidator)
     store_project_attributes_values(project, data, "issue_duedates", validators.IssueDueDateExportValidator)
+    store_swimlanes(project, data)
     check_if_there_is_some_error(_("error importing lists of project attributes"), project)
 
     # Create default values for project attributes
@@ -863,7 +923,7 @@ def _populate_project_object(project, data):
 def store_project_from_dict(data, owner=None):
     # Validate
     if owner:
-        _validate_if_owner_have_enought_space_to_this_project(owner, data)
+        _validate_if_owner_have_enough_space_to_this_project(owner, data)
 
     # Create project
     project = _create_project_object(data)
@@ -872,9 +932,10 @@ def store_project_from_dict(data, owner=None):
     try:
         _populate_project_object(project, data)
     except err.TaigaImportError:
-        # raise known inport errors
+        # raise known import errors
         raise
     except Exception as e:
+        logger.exception('Unexpected error importing project (by %s)', owner or "unknown user")
         # raise unknown errors as import error
         raise err.TaigaImportError(_("unexpected error importing project"), project)
 

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -21,15 +19,15 @@ from django.conf import settings
 
 
 CORS_ALLOWED_ORIGINS = "*"
-CORS_ALLOWED_METHODS = ["POST", "GET", "OPTIONS", "PUT", "DELETE", "PATCH", "HEAD"]
+CORS_ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
 CORS_ALLOWED_HEADERS = ["content-type", "x-requested-with",
-                         "authorization", "accept-encoding",
-                         "x-disable-pagination", "x-lazy-pagination",
-                         "x-host", "x-session-id", "set-orders"]
+                        "authorization", "accept-encoding",
+                        "x-disable-pagination", "x-lazy-pagination",
+                        "x-host", "x-session-id", "set-orders"]
 CORS_ALLOWED_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ["x-pagination-count", "x-paginated", "x-paginated-by",
-                        "x-pagination-current", "x-pagination-next", "x-pagination-prev",
-                        "x-site-host", "x-site-register"]
+                       "x-pagination-current", "x-pagination-next", "x-pagination-prev",
+                       "x-site-host", "x-site-register"]
 
 CORS_EXTRA_EXPOSE_HEADERS = getattr(settings, "APP_EXTRA_EXPOSE_HEADERS", [])
 
@@ -50,7 +48,7 @@ class CorsMiddleware(object):
         response["Access-Control-Allow-Methods"] = ",".join(CORS_ALLOWED_METHODS)
         response["Access-Control-Allow-Headers"] = ",".join(CORS_ALLOWED_HEADERS)
         response["Access-Control-Expose-Headers"] = ",".join(CORS_EXPOSE_HEADERS + CORS_EXTRA_EXPOSE_HEADERS)
-        response["Access-Control-Max-Age"] = "3600"
+        response["Access-Control-Max-Age"] = "1800"
 
         if CORS_ALLOWED_CREDENTIALS:
             response["Access-Control-Allow-Credentials"] = "true"

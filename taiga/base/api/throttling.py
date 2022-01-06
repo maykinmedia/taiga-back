@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -93,7 +91,7 @@ class SimpleRateThrottle(BaseThrottle):
 
     cache = default_cache
     timer = time.time
-    cache_format = "throtte_%(scope)s_%(ident)s"
+    cache_format = "throttle_%(scope)s_%(ident)s"
     scope = None
     THROTTLE_RATES = api_settings.DEFAULT_THROTTLE_RATES
 

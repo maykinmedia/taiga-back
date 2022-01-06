@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -143,7 +141,7 @@ class ProjectImporterViewSet(mixins.ImportThrottlingPolicyMixin, CreateModelMixi
                 is_admin=True
             )
 
-        # Create project values choicess
+        # Create project values choices
         if "points" in data:
             services.store.store_project_attributes_values(project_serialized.object, data,
                                                            "points", validators.PointsExportValidator)
@@ -183,6 +181,10 @@ class ProjectImporterViewSet(mixins.ImportThrottlingPolicyMixin, CreateModelMixi
             services.store.store_project_attributes_values(project_serialized.object, data,
                                                            "severities",
                                                            validators.SeverityExportValidator)
+        if "swimlanes" in data:
+            services.store.store_project_attributes_values(project_serialized.object, data,
+                                                           "swimlanes",
+                                                           validators.SwimlaneExportValidator)
 
         if ("points" in data or "issues_types" in data or
                 "issues_statuses" in data or "us_statuses" in data or

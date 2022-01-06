@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -19,6 +17,7 @@
 from django.apps import apps
 from django.conf import settings
 from django.db.models import F
+from django.dispatch import Signal
 
 from taiga.projects.notifications.services import create_notify_policy_if_not_exists
 
@@ -47,7 +46,7 @@ def membership_post_save(sender, instance, using, **kwargs):
         .update(user_order=0)
 
 
-## Project attributes
+## project attributes
 def project_post_save(sender, instance, created, **kwargs):
     """
     Populate new project dependen default data
@@ -85,6 +84,65 @@ def project_post_save(sender, instance, created, **kwargs):
                                   is_admin=True, email=instance.owner.email)
 
 
+## swimlanes
+def create_swimlane_user_story_statuses_on_swimalne_post_save(sender, instance, created, **kwargs):
+    """
+    Populate new swimlanes with SwimlaneUserStoryStatus objects.
+    """
+    if not created:
+        return
+
+    if instance._importing:
+        return
+
+    SwimlaneUserStoryStatus = apps.get_model("projects", "SwimlaneUserStoryStatus")
+    copy_from_main_status = instance.project.swimlanes.count() == 1
+    objects = (
+        SwimlaneUserStoryStatus(
+            swimlane=instance,
+            status=status,
+            wip_limit=status.wip_limit if copy_from_main_status else None
+        )
+    for status in instance.project.us_statuses.all())
+
+    SwimlaneUserStoryStatus.objects.bulk_create(objects)
+
+
+def set_default_project_swimlane_on_swimalne_post_save(sender, instance, created, **kwargs):
+    """
+    Set as project.default_swimlane if is the only one created.
+    """
+    if not created:
+        return
+
+    if instance._importing:
+        return
+
+    if instance.project.swimlanes.all().count() == 1:
+        instance.project.default_swimlane = instance
+        instance.project.save()
+
+
+def create_swimlane_user_story_statuses_on_userstory_status_post_save(sender, instance, created, **kwargs):
+    """
+    Populate swimlanes with SwimlaneUserStoryStatus objects when a new UserStoryStatus is created.
+    """
+    if not created:
+        return
+
+    SwimlaneUserStoryStatus = apps.get_model("projects", "SwimlaneUserStoryStatus")
+    copy_from_main_status = instance.project.swimlanes.count() == 1
+    objects = (
+        SwimlaneUserStoryStatus(
+            swimlane=swimlane,
+            status=instance,
+            wip_limit=instance.wip_limit if copy_from_main_status else None
+        )
+    for swimlane in instance.project.swimlanes.all())
+
+    SwimlaneUserStoryStatus.objects.bulk_create(objects)
+
+
 ## US statuses
 
 def try_to_close_or_open_user_stories_when_edit_us_status(sender, instance, created, **kwargs):
@@ -109,3 +167,8 @@ def try_to_close_or_open_user_stories_when_edit_task_status(sender, instance, cr
             services.close_userstory(user_story)
         else:
             services.open_userstory(user_story)
+
+
+## Custom signals
+
+issue_status_post_move_on_destroy = Signal(providing_args=["deleted", "moved"])

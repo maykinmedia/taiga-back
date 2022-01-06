@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -109,6 +107,12 @@ def create_related_userstories_in_bulk(bulk_data, epic, **additional_fields):
     """
     userstories = get_userstories_from_bulk(bulk_data, **additional_fields)
     project = additional_fields.get("project")
+
+    # Set default swimlane if kanban module is enabled
+    if project.is_kanban_activated:
+        for user_story in userstories:
+            user_story.swimlane = project.default_swimlane
+
     disconnect_userstories_signals()
 
     try:

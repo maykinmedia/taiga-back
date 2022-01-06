@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -31,7 +29,7 @@ class BaseRegisterValidator(validators.Validator):
     full_name = serializers.CharField(max_length=36)
     email = serializers.EmailField(max_length=255)
     username = serializers.CharField(max_length=255)
-    password = serializers.CharField(min_length=4)
+    password = serializers.CharField(min_length=6)
 
     def validate_username(self, attrs, source):
         value = attrs[source]

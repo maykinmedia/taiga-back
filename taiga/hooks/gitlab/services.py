@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -26,17 +24,24 @@ from taiga.base.utils.urls import get_absolute_url
 
 # Set this in settings.PROJECT_MODULES_CONFIGURATORS["gitlab"]
 def get_or_generate_config(project):
-    config = project.modules_config.config
-    if config and "gitlab" in config:
-        g_config = project.modules_config.config["gitlab"]
-    else:
-        g_config = {
-            "secret": uuid.uuid4().hex,
-            "valid_origin_ips": settings.GITLAB_VALID_ORIGIN_IPS,
-        }
+    # Default config
+    config = {
+        "secret": uuid.uuid4().hex,
+        "valid_origin_ips": settings.GITLAB_VALID_ORIGIN_IPS,
+    }
 
+    close_status = project.issue_statuses.filter(is_closed=True).order_by("order").first()
+    if close_status:
+        config["close_status"] = close_status.id
+
+    # Update with current config if exist
+    if project.modules_config.config:
+        config.update(project.modules_config.config.get("gitlab", {}))
+
+    # Generate webhook url
     url = reverse("gitlab-hook-list")
     url = get_absolute_url(url)
-    url = "{}?project={}&key={}".format(url, project.id, g_config["secret"])
-    g_config["webhooks_url"] = url
-    return g_config
+    url = "{}?project={}&key={}".format(url, project.id, config["secret"])
+    config["webhooks_url"] = url
+
+    return config

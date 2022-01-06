@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -51,7 +49,7 @@ class DuplicatedNameInProjectValidator:
             qs = model.objects.filter(project=attrs["project"], name=attrs[source])
 
         if qs and qs.exists():
-            raise ValidationError(_("Name duplicated for the project"))
+            raise ValidationError(_("Duplicated name"))
 
         return attrs
 
@@ -82,6 +80,18 @@ class UserStoryStatusValidator(DuplicatedNameInProjectValidator, validators.Mode
 class PointsValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
     class Meta:
         model = models.Points
+
+
+class SwimlaneValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
+    class Meta:
+        model = models.Swimlane
+        read_only_fields = ("order",)
+
+
+class SwimlaneUserStoryStatusValidator(validators.ModelValidator):
+    class Meta:
+        model = models.SwimlaneUserStoryStatus
+        read_only_fields = ("swimlane", "status")
 
 
 class UserStoryDueDateValidator(DuplicatedNameInProjectValidator, validators.ModelValidator):
@@ -253,7 +263,8 @@ class _MemberBulkValidator(validators.Validator):
             # If the validation comes from a request let's check the user is a valid contact
             request = self.context.get("request", None)
             if request is not None and request.user.is_authenticated:
-                valid_usernames = set(request.user.contacts_visible_by_user(request.user).values_list("username", flat=True))
+                all_usernames = request.user.contacts_visible_by_user(request.user).values_list("username", flat=True)
+                valid_usernames = set(all_usernames)
                 if username not in valid_usernames:
                     raise ValidationError(_("The user must be a valid contact"))
 

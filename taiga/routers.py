@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -68,6 +66,8 @@ from taiga.projects.api import InvitationViewSet
 from taiga.projects.api import EpicStatusViewSet
 from taiga.projects.api import UserStoryStatusViewSet
 from taiga.projects.api import PointsViewSet
+from taiga.projects.api import SwimlaneViewSet
+from taiga.projects.api import SwimlaneUserStoryStatusViewSet
 from taiga.projects.api import UserStoryDueDateViewSet
 from taiga.projects.api import TaskStatusViewSet
 from taiga.projects.api import TaskDueDateViewSet
@@ -87,6 +87,8 @@ router.register(r"invitations", InvitationViewSet, base_name="invitations")
 router.register(r"epic-statuses", EpicStatusViewSet, base_name="epic-statuses")
 router.register(r"userstory-statuses", UserStoryStatusViewSet, base_name="userstory-statuses")
 router.register(r"points", PointsViewSet, base_name="points")
+router.register(r"swimlanes", SwimlaneViewSet, base_name="swimlanes")
+router.register(r"swimlane-userstory-statuses", SwimlaneUserStoryStatusViewSet, base_name="swimlane-userstory-statuses")
 router.register(r"userstory-due-dates", UserStoryDueDateViewSet, base_name="userstory-due-dates")
 router.register(r"task-statuses", TaskStatusViewSet, base_name="task-statuses")
 router.register(r"task-due-dates", TaskDueDateViewSet, base_name="task-due-dates")

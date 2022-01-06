@@ -1,4 +1,5 @@
-# Copyright (C) 2014-2019 Taiga Agile LLC
+#
+# Copyright (C) 2014-present Taiga Agile LLC
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -22,7 +23,7 @@ def connect_userstories_signals():
     from taiga.projects.tagging import signals as tagging_handlers
     from . import signals as handlers
 
-    # When deleting user stories we must disable task signals while delating and
+    # When deleting user stories we must disable task signals while deleting and
     # enabling them in the end
     signals.pre_delete.connect(handlers.disable_task_signals,
                                sender=apps.get_model("userstories", "UserStory"),

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -19,6 +17,9 @@
 # This makes all code that import services works and
 # is not the baddest practice ;)
 
+# flake8: noqa
+
+
 from .bulk_update_order import apply_order_updates
 from .bulk_update_order import bulk_update_severity_order
 from .bulk_update_order import bulk_update_priority_order
@@ -28,6 +29,7 @@ from .bulk_update_order import bulk_update_task_status_order
 from .bulk_update_order import bulk_update_points_order
 from .bulk_update_order import bulk_update_userstory_status_order
 from .bulk_update_order import bulk_update_epic_status_order
+from .bulk_update_order import bulk_update_swimlane_order
 from .bulk_update_order import update_projects_order_in_bulk
 
 from .filters import get_all_tags
@@ -46,7 +48,7 @@ from .members import check_if_project_can_have_more_memberships
 
 from .modules_config import get_modules_config
 
-from .projects import check_if_project_privacity_can_be_changed
+from .projects import check_if_project_privacy_can_be_changed
 from .projects import check_if_project_can_be_created_or_updated
 from .projects import check_if_project_can_be_transfered
 from .projects import check_if_project_is_out_of_owner_limits

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -16,8 +14,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .common import *  # noqa, pylint: disable=unused-wildcard-import
 
-DEBUG = True
+def handle_move_on_destroy_issue_status(sender, deleted, moved, **kwargs):
+    if not hasattr(deleted.project, "modules_config"):
+        return
 
-TEMPLATES[0]["OPTIONS"]['context_processors'] += "django.template.context_processors.debug"
+    modules_config = deleted.project.modules_config
+
+    if modules_config.config and modules_config.config.get("gitlab", {}):
+        current_status_id = modules_config.config.get("gitlab", {}).get("close_status", None)
+
+        if current_status_id and current_status_id == deleted.id:
+            modules_config.config["gitlab"]["close_status"] = moved.id
+            modules_config.save()

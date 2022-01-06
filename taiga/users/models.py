@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -25,7 +23,7 @@ import re
 from django.apps import apps
 from django.apps.config import MODELS_MODULE_NAME
 from django.conf import settings
-from django.contrib.auth.models import UserManager, AbstractBaseUser
+from django.contrib.auth.models import AbstractBaseUser, UserManager
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.core import validators
@@ -121,10 +119,6 @@ class PermissionsMixin(models.Model):
         """
         return self.is_active and self.is_superuser
 
-    @property
-    def is_staff(self):
-        return self.is_superuser
-
 
 def get_default_uuid():
     return uuid.uuid4().hex
@@ -139,10 +133,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         validators=[
             validators.RegexValidator(re.compile(r"^[\w.-]+$"), _("Enter a valid username."), "invalid")
         ])
-    email = models.EmailField(_("email address"), max_length=255, blank=True, unique=True)
+    email = models.EmailField(_("email address"), max_length=255, null=False, blank=False, unique=True)
     is_active = models.BooleanField(_("active"), default=True,
         help_text=_("Designates whether this user should be treated as "
                     "active. Unselect this instead of deleting accounts."))
+    is_staff = models.BooleanField(_('staff status'), default=False,
+        help_text=_('Designates whether the user can log into this admin site.'),
+    )
 
     full_name = models.CharField(_("full name"), max_length=256, blank=True)
     color = models.CharField(max_length=9, null=False, blank=True, default=generate_random_hex_color,

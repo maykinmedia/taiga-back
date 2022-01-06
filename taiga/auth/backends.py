@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -26,11 +24,11 @@ session authentication backend of restframework with
 csrf token disabled.
 
 And the second (token) implements own version of oauth2
-like authentiacation but with selfcontained tokens. Thats
-makes authentication totally stateles.
+like authentication but with selfcontained tokens. Thats
+makes authentication totally stateless.
 
 It uses django signing framework for create new
-selfcontained tokens. This trust tokes from external
+self-contained tokens. This trust tokes from external
 fraudulent modifications.
 """
 
@@ -67,8 +65,8 @@ class Session(BaseAuthentication):
 
 class Token(BaseAuthentication):
     """
-    Self-contained stateles authentication implementatrion
-    that work similar to oauth2.
+    Self-contained stateless authentication implementation
+    that works similar to oauth2.
     It uses django signing framework for trust data stored
     in the token.
     """

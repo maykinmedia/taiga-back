@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -115,6 +112,16 @@ class PointsFactory(Factory):
 
     name = factory.Sequence(lambda n: "Points {}".format(n))
     value = 2
+    project = factory.SubFactory("tests.factories.ProjectFactory")
+
+
+class SwimlaneFactory(Factory):
+    class Meta:
+        model = "projects.Swimlane"
+        strategy = factory.CREATE_STRATEGY
+
+    name = factory.Sequence(lambda n: "Swimlane {}".format(n))
+    order = factory.Sequence(lambda n: n)
     project = factory.SubFactory("tests.factories.ProjectFactory")
 
 
@@ -756,6 +763,21 @@ def create_project(**kwargs):
     project.save()
 
     return project
+
+
+def create_swimlane(**kwargs):
+    "Create a swimlane along with its dependencies."
+
+    project = kwargs.pop("project", None)
+    if project is None:
+        project = ProjectFactory.create()
+
+    defaults = {
+        "project": project,
+    }
+    defaults.update(kwargs)
+
+    return SwimlaneFactory.create(**defaults)
 
 
 def create_user(**kwargs):

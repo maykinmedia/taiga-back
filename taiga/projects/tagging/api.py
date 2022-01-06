@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -99,10 +97,10 @@ class TagsColorsResourceMixin:
 class TaggedResourceMixin:
     def pre_save(self, obj):
         if obj.tags:
-            self._pre_save_new_tags_in_project_tagss_colors(obj)
+            self._pre_save_new_tags_in_project_tags_colors(obj)
         super().pre_save(obj)
 
-    def _pre_save_new_tags_in_project_tagss_colors(self, obj):
+    def _pre_save_new_tags_in_project_tags_colors(self, obj):
         new_obj_tags = OrderedSet()
         new_tags_colors = {}
 

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -23,7 +21,6 @@ from taiga.base import response
 from taiga.base import exceptions as exc
 from taiga.base.api.utils import get_object_or_404
 from taiga.base.decorators import list_route
-
 from taiga.projects.models import Project
 
 
@@ -35,9 +32,9 @@ class BulkUpdateOrderMixin:
     """
     This mixin need three fields in the child class:
 
-    - bulk_update_param: that the name of the field of the data received from
-      the cliente that contains the pairs (id, order) to sort the objects.
-    - bulk_update_perm: that containts the codename of the permission needed to sort.
+    - bulk_update_param: the name of the field of the data received from
+      the client that contains the pairs (id, order) to sort the objects.
+    - bulk_update_perm: the codename of the permission needed to sort.
     - bulk_update_order: method with bulk update order logic
     """
 
@@ -57,6 +54,6 @@ class BulkUpdateOrderMixin:
         self.check_permissions(request, 'bulk_update_order', project)
         if project.blocked_code is not None:
             raise exc.Blocked(_("Blocked element"))
-            
+
         self.__class__.bulk_update_order_action(project, request.user, bulk_data)
         return response.NoContent(data=None)

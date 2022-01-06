@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -126,7 +124,7 @@ class WikiLinkViewSet(BlockedByProjectMixin, ModelCrudViewSet):
                 defaults={"owner": self.request.user, "last_modifier": self.request.user})
 
             if created:
-                # Creaste the new history entre, sSet watcher for the new wiki page
+                # Create the new history entry, Set watcher for the new wiki page
                 # and send notifications about the new page created
                 history = take_snapshot(wiki_page, user=self.request.user)
                 analize_object_for_watchers(wiki_page, history.comment, history.owner)

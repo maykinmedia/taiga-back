@@ -16,4 +16,8 @@ static
 .cache
 .\#*
 .project
+.idea
 .env
+.envrc
+settings/config.py
+celerybeat-schedule

@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
-# Copyright (C) 2014-2017 Anler Hernández <hello@anler.me>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -23,11 +20,12 @@ from django.core.files import File
 from django.core import mail
 from django.core import signing
 
+from taiga.base import exceptions as exc
 from taiga.base.utils import json
 from taiga.projects.services import stats as stats_services
 from taiga.projects.history.services import take_snapshot
 from taiga.permissions.choices import ANON_PERMISSIONS
-from taiga.projects.models import Project
+from taiga.projects.models import Project, Swimlane
 from taiga.projects.userstories.models import UserStory
 from taiga.projects.tasks.models import Task
 from taiga.projects.issues.models import Issue
@@ -368,7 +366,7 @@ def test_points_name_duplicated(client):
     data = {"name": point_1.name}
     response = client.json.patch(url, json.dumps(data))
     assert response.status_code == 400
-    assert response.data["name"][0] == "Name duplicated for the project"
+    assert response.data["name"][0] == "Duplicated name"
 
 
 def test_update_points_when_not_null_values_for_points(client):
@@ -574,7 +572,7 @@ def test_destroy_point_and_reassign(client):
     response = client.delete(url)
 
     assert user_story.role_points.all()[0].points.id == p2.id
-    project = Project.objects.get(id=project.id)
+    project.refresh_from_db()
     assert project.default_points.id == p2.id
 
 
@@ -1467,11 +1465,11 @@ def test_project_transfer_validate_token_from_no_admin_member_with_valid_token(c
 
 
 ####################################################################################
-# Test taiga.projects.services.projects.check_if_project_privacity_can_be_changed
+# Test taiga.projects.services.projects.check_if_project_privacy_can_be_changed
 ####################################################################################
 
 from taiga.projects.services.projects import (
-    check_if_project_privacity_can_be_changed,
+    check_if_project_privacy_can_be_changed,
     ERROR_MAX_PUBLIC_PROJECTS_MEMBERSHIPS,
     ERROR_MAX_PUBLIC_PROJECTS,
     ERROR_MAX_PRIVATE_PROJECTS_MEMBERSHIPS,
@@ -1480,7 +1478,7 @@ from taiga.projects.services.projects import (
 
 # private to public
 
-def test_private_project_cant_be_public_because_owner_doesnt_have_enought_slot_and_too_much_members(client):
+def test_private_project_cant_be_public_because_owner_doesnt_have_enough_slot_and_too_much_members(client):
     project = f.create_project(is_private=True)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1490,11 +1488,11 @@ def test_private_project_cant_be_public_because_owner_doesnt_have_enought_slot_a
     project.owner.max_public_projects = 0
     project.owner.max_memberships_public_projects = 3
 
-    assert (check_if_project_privacity_can_be_changed(project) ==
+    assert (check_if_project_privacy_can_be_changed(project) ==
             {'can_be_updated': False, 'reason': ERROR_MAX_PUBLIC_PROJECTS_MEMBERSHIPS})
 
 
-def test_private_project_cant_be_public_because_owner_doesnt_have_enought_slot(client):
+def test_private_project_cant_be_public_because_owner_doesnt_have_enough_slot(client):
     project = f.create_project(is_private=True)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1504,7 +1502,7 @@ def test_private_project_cant_be_public_because_owner_doesnt_have_enought_slot(c
     project.owner.max_public_projects = 0
     project.owner.max_memberships_public_projects = 6
 
-    assert (check_if_project_privacity_can_be_changed(project) ==
+    assert (check_if_project_privacy_can_be_changed(project) ==
             {'can_be_updated': False, 'reason': ERROR_MAX_PUBLIC_PROJECTS})
 
 
@@ -1518,11 +1516,11 @@ def test_private_project_cant_be_public_because_too_much_members(client):
     project.owner.max_public_projects = 2
     project.owner.max_memberships_public_projects = 3
 
-    assert (check_if_project_privacity_can_be_changed(project) ==
+    assert (check_if_project_privacy_can_be_changed(project) ==
             {'can_be_updated': False, 'reason': ERROR_MAX_PUBLIC_PROJECTS_MEMBERSHIPS})
 
 
-def test_private_project_can_be_public_because_owner_has_enought_slot_and_project_has_enought_members(client):
+def test_private_project_can_be_public_because_owner_has_enough_slot_and_project_has_enough_members(client):
     project = f.create_project(is_private=True)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1532,7 +1530,7 @@ def test_private_project_can_be_public_because_owner_has_enought_slot_and_projec
     project.owner.max_public_projects = 2
     project.owner.max_memberships_public_projects = 6
 
-    assert (check_if_project_privacity_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
+    assert (check_if_project_privacy_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
 
 
 def test_private_project_can_be_public_because_owner_has_unlimited_slot_and_project_has_unlimited_members(client):
@@ -1545,7 +1543,7 @@ def test_private_project_can_be_public_because_owner_has_unlimited_slot_and_proj
     project.owner.max_public_projects = None
     project.owner.max_memberships_public_projects = None
 
-    assert (check_if_project_privacity_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
+    assert (check_if_project_privacy_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
 
 
 def test_private_project_can_be_public_because_owner_has_unlimited_slot(client):
@@ -1558,7 +1556,7 @@ def test_private_project_can_be_public_because_owner_has_unlimited_slot(client):
     project.owner.max_public_projects = None
     project.owner.max_memberships_public_projects = 6
 
-    assert (check_if_project_privacity_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
+    assert (check_if_project_privacy_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
 
 
 def test_private_project_can_be_public_because_project_has_unlimited_members(client):
@@ -1571,12 +1569,12 @@ def test_private_project_can_be_public_because_project_has_unlimited_members(cli
     project.owner.max_public_projects = 2
     project.owner.max_memberships_public_projects = None
 
-    assert (check_if_project_privacity_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
+    assert (check_if_project_privacy_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
 
 
 # public to private
 
-def test_public_project_cant_be_private_because_owner_doesnt_have_enought_slot_and_too_much_members(client):
+def test_public_project_cant_be_private_because_owner_doesnt_have_enough_slot_and_too_much_members(client):
     project = f.create_project(is_private=False)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1586,11 +1584,11 @@ def test_public_project_cant_be_private_because_owner_doesnt_have_enought_slot_a
     project.owner.max_private_projects = 0
     project.owner.max_memberships_private_projects = 3
 
-    assert (check_if_project_privacity_can_be_changed(project) ==
+    assert (check_if_project_privacy_can_be_changed(project) ==
             {'can_be_updated': False, 'reason': ERROR_MAX_PRIVATE_PROJECTS_MEMBERSHIPS})
 
 
-def test_public_project_cant_be_private_because_owner_doesnt_have_enought_slot(client):
+def test_public_project_cant_be_private_because_owner_doesnt_have_enough_slot(client):
     project = f.create_project(is_private=False)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1600,7 +1598,7 @@ def test_public_project_cant_be_private_because_owner_doesnt_have_enought_slot(c
     project.owner.max_private_projects = 0
     project.owner.max_memberships_private_projects = 6
 
-    assert (check_if_project_privacity_can_be_changed(project) ==
+    assert (check_if_project_privacy_can_be_changed(project) ==
             {'can_be_updated': False, 'reason': ERROR_MAX_PRIVATE_PROJECTS})
 
 
@@ -1614,11 +1612,11 @@ def test_public_project_cant_be_private_because_too_much_members(client):
     project.owner.max_private_projects = 2
     project.owner.max_memberships_private_projects = 3
 
-    assert (check_if_project_privacity_can_be_changed(project) ==
+    assert (check_if_project_privacy_can_be_changed(project) ==
             {'can_be_updated': False, 'reason': ERROR_MAX_PRIVATE_PROJECTS_MEMBERSHIPS})
 
 
-def test_public_project_can_be_private_because_owner_has_enought_slot_and_project_has_enought_members(client):
+def test_public_project_can_be_private_because_owner_has_enough_slot_and_project_has_enough_members(client):
     project = f.create_project(is_private=False)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1628,7 +1626,7 @@ def test_public_project_can_be_private_because_owner_has_enought_slot_and_projec
     project.owner.max_private_projects = 2
     project.owner.max_memberships_private_projects = 6
 
-    assert (check_if_project_privacity_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
+    assert (check_if_project_privacy_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
 
 
 def test_public_project_can_be_private_because_owner_has_unlimited_slot_and_project_has_unlimited_members(client):
@@ -1641,7 +1639,7 @@ def test_public_project_can_be_private_because_owner_has_unlimited_slot_and_proj
     project.owner.max_private_projects = None
     project.owner.max_memberships_private_projects = None
 
-    assert (check_if_project_privacity_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
+    assert (check_if_project_privacy_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
 
 
 def test_public_project_can_be_private_because_owner_has_unlimited_slot(client):
@@ -1654,7 +1652,7 @@ def test_public_project_can_be_private_because_owner_has_unlimited_slot(client):
     project.owner.max_private_projects = None
     project.owner.max_memberships_private_projects = 6
 
-    assert (check_if_project_privacity_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
+    assert (check_if_project_privacy_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
 
 
 def test_public_project_can_be_private_because_project_has_unlimited_members(client):
@@ -1667,7 +1665,7 @@ def test_public_project_can_be_private_because_project_has_unlimited_members(cli
     project.owner.max_private_projects = 2
     project.owner.max_memberships_private_projects = None
 
-    assert (check_if_project_privacity_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
+    assert (check_if_project_privacy_can_be_changed(project) == {'can_be_updated': True, 'reason': None})
 
 
 ####################################################################################
@@ -1676,7 +1674,7 @@ def test_public_project_can_be_private_because_project_has_unlimited_members(cli
 
 from taiga.projects.services.projects import check_if_project_is_out_of_owner_limits
 
-def test_private_project_when_owner_doesnt_have_enought_slot_and_too_much_members(client):
+def test_private_project_when_owner_doesnt_have_enough_slot_and_too_much_members(client):
     project = f.create_project(is_private=True)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1689,7 +1687,7 @@ def test_private_project_when_owner_doesnt_have_enought_slot_and_too_much_member
     assert check_if_project_is_out_of_owner_limits(project) == True
 
 
-def test_private_project_when_owner_doesnt_have_enought_slot(client):
+def test_private_project_when_owner_doesnt_have_enough_slot(client):
     project = f.create_project(is_private=True)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1715,7 +1713,7 @@ def test_private_project_when_too_much_members(client):
     assert check_if_project_is_out_of_owner_limits(project) == True
 
 
-def test_private_project_when_owner_has_enought_slot_and_project_has_enought_members(client):
+def test_private_project_when_owner_has_enough_slot_and_project_has_enough_members(client):
     project = f.create_project(is_private=True)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1769,7 +1767,7 @@ def test_private_project_when_project_has_unlimited_members(client):
 
 # public
 
-def test_public_project_when_owner_doesnt_have_enought_slot_and_too_much_members(client):
+def test_public_project_when_owner_doesnt_have_enough_slot_and_too_much_members(client):
     project = f.create_project(is_private=False)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1782,7 +1780,7 @@ def test_public_project_when_owner_doesnt_have_enought_slot_and_too_much_members
     assert check_if_project_is_out_of_owner_limits(project) == True
 
 
-def test_public_project_when_owner_doesnt_have_enought_slot(client):
+def test_public_project_when_owner_doesnt_have_enough_slot(client):
     project = f.create_project(is_private=False)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -1808,7 +1806,7 @@ def test_public_project_when_too_much_members(client):
     assert check_if_project_is_out_of_owner_limits(project) == True
 
 
-def test_public_project_when_owner_has_enought_slot_and_project_has_enought_members(client):
+def test_public_project_when_owner_has_enough_slot_and_project_has_enough_members(client):
     project = f.create_project(is_private=False)
     f.MembershipFactory(project=project, user=project.owner)
     f.MembershipFactory(project=project)
@@ -2504,3 +2502,306 @@ def test_prevent_delete_issue_default_due_dates(client):
 
     assert response.status_code == 400
     assert project.issue_duedates.count() == 1
+
+
+def test_create_first_swimlane_and_assign_to_uss(client):
+    project = f.create_project()
+    membership = f.create_membership(project=project, is_admin=True)
+    us = f.create_userstory(owner=membership.user,
+                            project=project)
+    assert us.swimlane is None
+    assert project.default_swimlane is None
+
+    url = reverse('swimlanes-list')
+    data = {
+        "project": project.id,
+        "name": "Swimlane 1"
+    }
+    client.login(membership.user)
+    response = client.json.post(url, json.dumps(data))
+    us.refresh_from_db()
+    project.refresh_from_db()
+
+    assert response.status_code == 201
+    assert project.swimlanes.count() == 1
+    assert project.default_swimlane_id == us.swimlane_id
+    assert us.swimlane is not None
+
+
+def test_create_second_swimlane(client):
+    # given a first swimlane related to a project
+    project = f.create_project()
+    membership = f.create_membership(project=project, is_admin=True)
+    us = f.create_userstory(owner=membership.user,
+                            project=project)
+
+    url = reverse('swimlanes-list')
+    data = {
+        "project": project.id,
+        "name": "Swimlane 1"
+    }
+    client.login(membership.user)
+    response = client.json.post(url, json.dumps(data))
+    swimlane_1_id = json.loads(response.content)['id']
+
+    project.refresh_from_db()
+    assert project.default_swimlane_id == swimlane_1_id
+
+    # when: create second swimlane
+    data = {
+        "project": project.id,
+        "name": "Swimlane 2"
+    }
+    client.login(membership.user)
+    response = client.json.post(url, json.dumps(data))
+    swimlane_2_id = json.loads(response.content)['id']
+    swimlane_2 = Swimlane.objects.get(pk=swimlane_2_id)
+
+    us.refresh_from_db()
+    project.refresh_from_db()
+
+    # then
+    assert response.status_code == 201
+    assert project.swimlanes.count() == 2
+    assert project.default_swimlane_id == swimlane_1_id
+    assert swimlane_2.user_stories.count() == 0
+    assert us.swimlane.id == swimlane_1_id
+
+
+def test_swimlane_bulk_update_order(client):
+    project = f.create_project()
+    membership = f.create_membership(project=project, is_admin=True)
+    us1 = f.create_userstory(subject='us1',
+                             owner=membership.user,
+                             project=project)
+    us2 = f.create_userstory(subject='us2',
+                             owner=membership.user,
+                             project=project)
+
+    url = reverse('swimlanes-list')
+    data = {
+        "project": project.id,
+        "name": "S1"
+    }
+    client.login(membership.user)
+    response = client.json.post(url, json.dumps(data))
+
+    project.refresh_from_db()
+    swimlane1 = project.swimlanes.filter(name='S1').first()
+
+    # both uss now belong to the first new swimlane
+    assert swimlane1.user_stories.count() == 2
+
+    # us without swimlane
+    us3 = f.create_userstory(subject='us3',
+                             owner=membership.user,
+                             project=project)
+    data = {
+        "project": project.id,
+        "name": "S2"
+    }
+    client.login(membership.user)
+    response = client.json.post(url, json.dumps(data))
+
+    project.refresh_from_db()
+    swimlane2 = project.swimlanes.filter(name='S2').first()
+    us4 = f.create_userstory(subject='us4',
+                             owner=membership.user,
+                             project=project,
+                             swimlane=swimlane2)
+    us5 = f.create_userstory(subject='us5',
+                             owner=membership.user,
+                             project=project,
+                             swimlane=swimlane2)
+
+    # both new user stories belong to the second swimlane
+    assert swimlane2.user_stories.count() == 2
+
+    # In this moment, they are arranged like:
+    # us1, us2, us4, us5, us3
+    project.refresh_from_db()
+    ordered_uss = project.user_stories.all().order_by('swimlane__order', 'kanban_order')
+
+    assert ordered_uss[0].subject == 'us1'
+    assert ordered_uss[1].subject == 'us2'
+    assert ordered_uss[2].subject == 'us4'
+    assert ordered_uss[3].subject == 'us5'
+    assert ordered_uss[4].subject == 'us3'
+
+    # After arranging the swimlanes, they should be like:
+    # us4, us5, us1, us2, us3
+    url = reverse('swimlanes-bulk-update-order')
+    data = {
+        "project": project.id,
+        "bulk_swimlanes": [
+            [swimlane2.id, 0],
+            [swimlane1.id, 1],
+        ]
+    }
+    response = client.json.post(url, json.dumps(data))
+
+    project.refresh_from_db()
+    ordered_uss = project.user_stories.all().order_by('swimlane__order', 'kanban_order')
+
+    assert ordered_uss[0].subject == 'us4'
+    assert ordered_uss[1].subject == 'us5'
+    assert ordered_uss[2].subject == 'us1'
+    assert ordered_uss[3].subject == 'us2'
+    assert ordered_uss[4].subject == 'us3'
+
+
+def test_delete_swimlane(client):
+    project = f.create_project()
+    membership = f.create_membership(project=project, is_admin=True)
+    us1 = f.create_userstory(subject='us1',
+                             owner=membership.user,
+                             project=project)
+    us2 = f.create_userstory(subject='us2',
+                             owner=membership.user,
+                             project=project)
+
+    url = reverse('swimlanes-list')
+    data = {
+        "project": project.id,
+        "name": "S1"
+    }
+    client.login(membership.user)
+    response = client.json.post(url, json.dumps(data))
+
+    project.refresh_from_db()
+    swimlane1 = project.swimlanes.filter(name='S1').first()
+
+    # us without swimlane
+    us3 = f.create_userstory(subject='us3',
+                             owner=membership.user,
+                             project=project)
+
+    data = {
+        "project": project.id,
+        "name": "S2"
+    }
+    response = client.json.post(url, json.dumps(data))
+
+    project.refresh_from_db()
+    swimlane2 = project.swimlanes.filter(name='S2').first()
+
+    # set S2 as default swimlane
+    project.default_swimlane = swimlane2
+    project.save()
+
+    us4 = f.create_userstory(subject='us4',
+                             owner=membership.user,
+                             project=project,
+                             swimlane=swimlane2)
+    us5 = f.create_userstory(subject='us5',
+                             owner=membership.user,
+                             project=project,
+                             swimlane=swimlane2)
+
+    url = reverse('swimlanes-detail', kwargs={"pk": swimlane1.id})
+
+    # force an error with swimlane=None
+    response = client.json.delete(url)
+    assert response.status_code == 400
+    assert response.data['_error_message'] == "Cannot set swimlane to None if there are available swimlanes"
+
+    # force an error with swimlane=non_existing
+    url = reverse('swimlanes-detail',
+            kwargs={"pk": swimlane1.id}) + "?moveTo=300"
+    response = client.json.delete(url)
+    assert response.status_code == 404
+    assert response.data['_error_message'] == "No Swimlane matches the given query."
+
+    # In this moment, they are arranged like:
+    # us1, us2, us3, us4, us5
+    # After deleting swimlane1, they should be like:
+    # us3, us4, us5, us1, us2
+    url = reverse('swimlanes-detail',
+            kwargs={"pk": swimlane1.id}) + "?moveTo={}".format(swimlane2.id)
+    response = client.json.delete(url)
+
+    assert response.status_code == 204
+
+    project.refresh_from_db()
+    ordered_uss = project.user_stories.all().order_by('kanban_order')
+
+    assert ordered_uss[0].subject == 'us3'
+    assert ordered_uss[0].swimlane is None
+    assert ordered_uss[1].subject == 'us4'
+    assert ordered_uss[1].swimlane == swimlane2
+    assert ordered_uss[2].subject == 'us5'
+    assert ordered_uss[2].swimlane == swimlane2
+    assert ordered_uss[3].subject == 'us1'
+    assert ordered_uss[3].swimlane == swimlane2
+    assert ordered_uss[4].subject == 'us2'
+    assert ordered_uss[4].swimlane == swimlane2
+
+
+def test_prevent_delete_swimlane_if_is_the_default_and_there_are_more_than_one(client):
+    project = f.create_project()
+    membership = f.create_membership(project=project, is_admin=True)
+    sw1 = f.create_swimlane(project=project)
+    sw2 = f.create_swimlane(project=project)
+
+    project.refresh_from_db()
+    assert project.default_swimlane_id == sw1.id
+
+    client.login(membership.user)
+
+    # force an error trying to delete sw1 (the default swimlane)
+    url = reverse('swimlanes-detail',
+            kwargs={"pk": sw1.id}) + "?moveTo={}".format(sw2.id)
+    response = client.json.delete(url)
+    assert response.status_code == 400
+    assert '_error_message' in response.data
+
+    # there is no problem removing not default swimlanes
+    url = reverse('swimlanes-detail',
+            kwargs={"pk": sw2.id}) + "?moveTo={}".format(sw1.id)
+    response = client.json.delete(url)
+    assert response.status_code == 204
+
+    # Now sw1 is the only one, so you can delete it
+    url = reverse('swimlanes-detail', kwargs={"pk": sw1.id})
+    response = client.json.delete(url)
+    assert response.status_code == 204
+
+    project.refresh_from_db()
+    assert project.default_swimlane_id is None
+
+
+def test_swimlane_userstory_statuses_creation_and_set_default_wip_limits_for_first_swimlane_creation_only(client):
+    project = f.create_project()
+    project.default_us_status.wip_limit = 42
+    project.default_us_status.save()
+
+    swimlane1 = f.create_swimlane(project=project)
+
+    assert swimlane1.statuses.count() == 1
+    assert swimlane1.statuses.first().wip_limit == 42
+
+    swimlane2 = f.create_swimlane(project=project)
+
+    assert swimlane2.statuses.count() == 1
+    assert swimlane2.statuses.first().wip_limit is None
+
+
+def test_swimlane_userstory_statuses_creation_when_a_new_user_story_status_is_created(client):
+    project = f.create_project()
+
+    project.default_us_status.wip_limits = 42
+    project.default_us_status.save()
+
+    swimlane1 = f.create_swimlane(project=project)
+
+    f.UserStoryStatusFactory(project=project, wip_limit=24)
+
+    assert swimlane1.statuses.count() == 2
+    assert swimlane1.statuses.all()[1].wip_limit == 24
+
+    swimlane2 = f.create_swimlane(project=project)
+
+    f.UserStoryStatusFactory(project=project, wip_limit=32)
+
+    assert swimlane2.statuses.count() == 3
+    assert swimlane2.statuses.all()[2].wip_limit is None

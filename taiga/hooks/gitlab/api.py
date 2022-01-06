@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -49,23 +47,24 @@ class GitLabViewSet(BaseWebhookApiViewSet):
         if project.modules_config.config is None:
             return False
 
-        project_secret = project.modules_config.config.get("gitlab", {}).get("secret", "")
+        gitlab_config = project.modules_config.config.get("gitlab", {})
+
+        project_secret = gitlab_config.get("secret", "")
         if not project_secret:
             return False
 
-        gitlab_config = project.modules_config.config.get("gitlab", {})
         valid_origin_ips = gitlab_config.get("valid_origin_ips", settings.GITLAB_VALID_ORIGIN_IPS)
         origin_ip = get_ip(request)
-        mathching_origin_ip = True
+        matching_origin_ip = True
 
         if valid_origin_ips:
             try:
-                mathching_origin_ip = len(all_matching_cidrs(origin_ip,valid_origin_ips)) > 0
+                matching_origin_ip = len(all_matching_cidrs(origin_ip,valid_origin_ips)) > 0
 
             except (AddrFormatError, ValueError):
-                mathching_origin_ip = False
+                matching_origin_ip = False
 
-        if not mathching_origin_ip:
+        if not matching_origin_ip:
             return False
 
         return project_secret == secret_key

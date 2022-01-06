@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -33,7 +31,7 @@ class BaseWebhookApiViewSet(GenericViewSet):
     parser_classes = ()
 
     # This dict associates the event names we are listening for
-    # with their reponsible classes (extending event_hooks.BaseEventHook)
+    # with their responsible classes (extending event_hooks.BaseEventHook)
     event_hook_classes = {}
 
     def _validate_signature(self, project, request):

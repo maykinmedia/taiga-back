@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 Andrey Antukh <niwi@niwi.nz>
-# Copyright (C) 2014-2017 Jesús Espino <jespinog@gmail.com>
-# Copyright (C) 2014-2017 David Barragán <bameda@dbarragan.com>
-# Copyright (C) 2014-2017 Alejandro Alonso <alejandro.alonso@kaleidos.net>
+# Copyright (C) 2014-present Taiga Agile LLC
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -103,6 +101,12 @@ URL_CHOICES = [
     "https://tree.taiga.io",
     "https://tribe.taiga.io"]
 
+WIP_LIMITS_CHOICES = (
+    [0] * 14 +
+    [2] * 1 +
+    [3] * 2 +
+    [4] * 3)
+
 BASE_USERS = getattr(settings, "SAMPLE_DATA_BASE_USERS", {})
 NUM_USERS = getattr(settings, "SAMPLE_DATA_NUM_USERS", 10)
 NUM_INVITATIONS =getattr(settings, "SAMPLE_DATA_NUM_INVITATIONS",  2)
@@ -156,7 +160,7 @@ class Command(BaseCommand):
 
         for x in projects_range:
             project = self.create_project(
-                x,
+                x + 1,  # this way the Project will have the same name as the id: Project 1 with id: 1
                 is_private=x in [2, 4],
                 blocked_code = BLOCKED_BY_STAFF if x in(blocked_projects_range) else None
             )
@@ -225,6 +229,18 @@ class Command(BaseCommand):
                                                         type=self.sd.choice(TYPES_CHOICES)[0],
                                                         project=project,
                                                         order=i)
+
+                # Create swimlanes
+                if self.sd.boolean():
+                    names = set([self.sd.words(1, 2) for i in range(1, 6)])
+                    for j, name in enumerate(names):
+                        swimlane = Swimlane.objects.create(name=name,
+                                                           project=project,
+                                                           order=j+1)
+                        # Set wip limits
+                        for status in swimlane.statuses.all():
+                            status.wip_limit = self.sd.choice(WIP_LIMITS_CHOICES)
+                            status.save()
 
                 start_date = now() - datetime.timedelta(55)
 
@@ -445,7 +461,8 @@ class Command(BaseCommand):
                                       milestone=milestone,
                                       status=self.sd.db_object_from_queryset(project.us_statuses.filter(
                                                                              is_closed=False)),
-                                      tags=self.sd.words(1, 3).split(" "))
+                                      tags=self.sd.words(1, 3).split(" "),
+                                      swimlane=self.sd.choice(list(project.swimlanes.all())) if project.swimlanes.count() > 0 else None)
 
         for role_points in us.role_points.filter(role__in=computable_project_roles):
             if milestone:
