@@ -1,0 +1,15 @@
+{% extends "emails/base-body-html.jinja" %}
+
+{% block body %}
+    <h1>The following open issues have had activity in the past 24 hours</h1>
+    {% for project, issues, url, nr_issues in projects %}
+      <strong>{{ project }}: {{ nr_issues }}</strong>
+      <ul>
+      {% for issue in issues %}
+      <li><a href="{{ url }}/{{ issue.ref }}/">#{{ issue.ref }}</a>: {{ issue.subject }}
+      <br /><span style='font-size: smaller;'>Assigned: {{ issue.assigned_to }} - Status: <span style='color: {{ issue.status.color }}'>{{ issue.status }}</span><br />Type: <span style='color: {{ issue.type.color }}'>{{ issue.type }}</span> - Severity: {{ issue.severity }} - Priority: {{ issue.priority }}</span></li>
+      {% endfor %}
+      </ul>
+    {% endfor %}
+    <p><small>The Taiga Team</small></p>
+{% endblock %}

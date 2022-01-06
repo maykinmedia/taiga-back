@@ -1,0 +1,29 @@
+{% extends "emails/base-body-html.jinja" %}
+
+{% block body %}
+    <h1>The following issues are open</h1>
+    <p>
+    Summary:
+    <ul>
+    {% for project_dict in projects %}
+        <li><a href="{{ project_dict.url }}s/">{{ project_dict.project }}</a>: {{ project_dict.nr_issues }}<br />
+	<span style='font-size: smaller;'>
+	{% for issue_type in project_dict.issue_types %}
+	  <span style='color: {{ issue_type.color }}'>{{ issue_type.name }}: {{ issue_type.nr }}</span>{% if not loop.last %}, {% endif %}
+	{% endfor %}
+	</span>
+	</li>
+    {% endfor %}
+    </ul>
+    
+    {% for project_dict in projects %}
+      <strong>{{ project_dict.project }}: {{ project_dict.nr_issues }}</strong>
+      <ul>
+      {% for issue in project_dict.issues %}
+      <li><a href="{{ project_dict.url }}/{{ issue.ref }}/">#{{ issue.ref }}</a>: {{ issue.subject }}
+      <br /><span style='font-size: smaller;'>Assigned: {{ issue.assigned_to }} - Status: <span style='color: {{ issue.status.color }}'>{{ issue.status }}</span><br />Type: <span style='color: {{ issue.type.color }}'>{{ issue.type }}</span> - Severity: {{ issue.severity }} - Priority: {{ issue.priority }}</span></li>
+      {% endfor %}
+      </ul>
+    {% endfor %}
+    <p><small>The Monkey-Taiga Team</small></p>
+{% endblock %}
