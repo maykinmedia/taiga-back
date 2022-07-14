@@ -18,15 +18,13 @@
 
 import datetime
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django.conf import settings
-from django.db.models import Count
 
 from taiga.base.utils.urls import get_absolute_url
-from taiga.projects.models import Project, Membership
 from taiga.projects.issues.models import Issue
-from taiga.projects.notifications.models import HistoryChangeNotification
+from taiga.projects.models import Project
 from taiga.users.models import User
 
 NOTIFY_ISSUES_TO_SU_INTERVAL = 3600 * 24
