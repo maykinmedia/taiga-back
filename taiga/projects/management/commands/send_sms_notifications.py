@@ -1,7 +1,7 @@
 
 import datetime
 from functools import reduce
-from typing import List, NoReturn, Optional, Union
+from typing import List, NoReturn, Optional, Union, Any
 
 import messagebird
 from django.conf import settings
@@ -72,7 +72,7 @@ class Command(BaseCommand):
 
     def raise_command_error(self, error: messagebird.ErrorException, action: str) -> NoReturn:
         message = f"Failed to {action}. The following error{'s' if len(error.errors) > 1 else ''} happened:\n"
-        message += "\n".join([f"{e.description} (code: {e.code})" for e in error.errors])
+        message += "\n".join(f"{e.description} (code: {e.code})" for e in error.errors)
         raise CommandError(message)
 
     def check_balance(self) -> None:
@@ -118,7 +118,7 @@ class Command(BaseCommand):
 
         return issues
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> str:
         if options["phonenumbers"] is None:
             raise CommandError("No phone numbers provided, and none are found in settings.")
         if options["accesskey"] is None:
@@ -138,9 +138,10 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"Warning: {number} is not a Dutch number. Prices might differ."))
 
         issues = self.get_issues(options["severity"], options["priority"], options["last_updated"], options["blacklist"])
+        self.issues = issues
 
         if issues.exists():
-            issues_str = "\n".join([f"#{issue.ref}: {issue.subject} ({issue.project.slug})" for issue in issues])
+            issues_str = "\n".join(f"#{issue.ref}: {issue.subject} ({issue.project.slug})" for issue in issues)
 
             # Should use Django pluralization instead, but messages should be sent in English
             message = (
@@ -161,3 +162,5 @@ class Command(BaseCommand):
             )
         else:
             self.stdout.write("No corresponding issues found.")
+
+        return "End of command."
