@@ -39,6 +39,7 @@ def create_responses() -> None:
         }
     )
 
+
 @pytest.mark.django_db
 @responses.activate
 def test_sms_notifications_ok():
@@ -57,6 +58,7 @@ def test_sms_notifications_ok():
 
     assert cmd.issues.count() == 1
     assert cmd.issues.first() == issue_critical
+
 
 @pytest.mark.django_db
 @responses.activate
