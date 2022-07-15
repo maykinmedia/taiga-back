@@ -65,9 +65,9 @@ def test_sms_notifications_ok():
 def test_sms_notifications_nothing():
     create_responses()
     severity_important = SeverityFactory(name="Important 1")
-    issue_important = IssueFactory(severity=severity_important)
+    IssueFactory(severity=severity_important)
     severity_critical = SeverityFactory(name="critical 1")
-    issue_critical = IssueFactory(
+    IssueFactory(
         severity=severity_critical,
         created_date=timezone.now() - timedelta(seconds=10 * 60)
     )
