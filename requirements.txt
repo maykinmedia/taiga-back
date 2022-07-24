@@ -201,4 +201,5 @@ zipp==1.2.0
     # via
     #   -r requirements.in
     #   importlib-metadata
-
+messagebird==2.1.0
+    # via -r requirements.in

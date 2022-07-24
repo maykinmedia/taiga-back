@@ -4,4 +4,5 @@ coveralls
 pytest
 pytest-django
 factory-boy
+responses==0.10.15
 python-jose>=3.0.0
