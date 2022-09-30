@@ -6,21 +6,133 @@
 # Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.contrib import admin
+from django.conf import settings
+from django.utils.safestring import mark_safe
 
+from taiga.base.utils.urls import get_absolute_url
 from taiga.projects.attachments.admin import AttachmentInline
 from taiga.projects.notifications.admin import WatchedInline
 from taiga.projects.votes.admin import VoteInline
+from taiga.projects.history.utils import attach_total_comments_to_queryset
+from taiga.users.models import User
 
 from . import models
 
+class SuperuserListFilter(admin.SimpleListFilter):
+    title = "Assigned to Maykiner"
+    parameter_name = "maykiners"
+    def lookups(self, request, model_admin):
+        qs = User.objects.filter(email__icontains='maykinmedia.nl', is_active=True).order_by('full_name')
+        return [(u.id, u.full_name) for u in qs]
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(assigned_to__id=self.value())
 
+class ClosedIssuesListFilter(admin.SimpleListFilter):
+    title = "Closed or Open"
+    parameter_name = "closed_open"
+    def lookups(self, request, model_admin):
+        return [
+            ('open', 'Open'),
+            ('closed', 'Closed')
+        ]
+    
+    def queryset(self, request, queryset):
+        if self.value():
+            if self.value() == 'open':
+                return queryset.filter(status__is_closed=False)
+            if self.value() == 'closed':
+                return queryset.filter(status__is_closed=True)
+
+
+class TagsArrayFieldListFilter(admin.SimpleListFilter):
+    """An admin list filter for ArrayFields."""
+    title = "Issue tags"
+    parameter_name = "tags"
+    
+    def lookups(self, request, model_admin):
+        """Return the filtered queryset."""
+        queryset_values = model_admin.model.objects.values_list(
+            self.parameter_name, flat=True
+        )
+        values = []
+        for sublist in queryset_values:
+            if sublist:
+                for value in sublist:
+                    if value:
+                        values.append((value, value))
+            else:
+                values.append(("null", "-"))
+        return sorted(set(values))
+
+    def queryset(self, request, queryset):
+        """Return the filtered queryset."""
+        lookup_value = self.value()
+        if lookup_value:
+            lookup_filter = (
+                {"{}__isnull".format(self.parameter_name): True}
+                if lookup_value == "null"
+                else {"{}__contains".format(self.parameter_name): [lookup_value]}
+            )
+            queryset = queryset.filter(**lookup_filter)
+        return queryset
+
+def custom_titled_filter(title):
+    class Wrapper(admin.FieldListFilter):
+        def __new__(cls, *args, **kwargs):
+            instance = admin.FieldListFilter.create(*args, **kwargs)
+            instance.title = title
+            return instance
+    return Wrapper
+    
 class IssueAdmin(admin.ModelAdmin):
-    list_display = ["project", "milestone", "ref", "subject",]
+    list_display = ["get_ref", "get_subject", "project", "status", "assigned_to", "get_type", "get_severity", "get_priority", "modified_date", "created_date", "get_activity", "owner"]
     list_display_links = ["ref", "subject",]
+    list_filter = [ClosedIssuesListFilter,
+                   ("type__name", custom_titled_filter("Type")),
+                   SuperuserListFilter,
+                   ("severity__name", custom_titled_filter("Severity")),
+                   ("priority__name", custom_titled_filter("Priority")),
+                   ("status__name", custom_titled_filter("Status")),
+                   TagsArrayFieldListFilter,
+                   "project"]
     inlines = [WatchedInline, VoteInline]
     raw_id_fields = ["project"]
-    search_fields = ["subject", "description", "id", "ref"]
+    search_fields = ["subject", "description", "id", "ref", "project__name"]
+    date_hierarchy = "created_date"
+    ordering = ("-modified_date",)
 
+    def get_queryset(self, request):
+        qs = super(IssueAdmin, self).get_queryset(request)
+        qs = attach_total_comments_to_queryset(qs)
+        return qs
+    
+    def get_ref(self, obj):
+        return mark_safe("<a target='_blank' href='{}'>{}</a>".format(get_absolute_url('/project/{}/issue/{}'.format(obj.project.slug, obj.ref)),
+                                                      obj.ref))
+
+    def get_subject(self, obj):
+        return mark_safe("<a target='_blank' href='{}'>{}</a>".format(get_absolute_url('/project/{}/issue/{}'.format(obj.project.slug, obj.ref)),
+                                                      obj.subject))
+
+    def get_label_style(self):
+        return "padding: 4px; color: white; font-weight: bold; border-radius: 4px; text-shadow: 2px 2px black;"
+    
+    def get_type(self, obj):
+        return mark_safe("<a href='?type__name={}' style='{} background-color: {};'>{}</a>".format(obj.type,
+                                                                                                   self.get_label_style(), obj.type.color, obj.type))
+    
+    def get_severity(self, obj):
+        return mark_safe("<a href='?severity__name={}' style='{} background-color: {};'>{}</a>".format(obj.severity,
+                                                                                                       self.get_label_style(), obj.severity.color, obj.severity))
+
+    def get_priority(self, obj):
+        return mark_safe("<a href='?priority__name={}' style='{} background-color: {};'>{}</a>".format(obj.priority,
+                                                                                                       self.get_label_style(), obj.priority.color, obj.priority))
+    
+    def get_activity(self, obj):
+        return mark_safe("{} comments".format(obj.total_comments))
+                         
     def get_object(self, *args, **kwargs):
         self.obj = super().get_object(*args, **kwargs)
         return self.obj

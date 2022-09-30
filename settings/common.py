@@ -416,8 +416,8 @@ LOGGING = {
     },
     "loggers": {
         "django": {
-            "handlers": ["null"],
-            "level": "INFO",
+            "handlers": ["project", "console"],
+            "level": "DEBUG",
             "propagate": True,
         },
         "django.request": {
