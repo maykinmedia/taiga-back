@@ -420,8 +420,8 @@ LOGGING = {
     },
     "loggers": {
         "django": {
-            "handlers": ["project"],
-            "level": "INFO",
+            "handlers": ["project", "console"],
+            "level": "DEBUG",
             "propagate": True,
         },
         "django.request": {
