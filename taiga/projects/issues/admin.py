@@ -161,7 +161,7 @@ def custom_titled_filter(title):
     return Wrapper
     
 class IssueAdmin(admin.ModelAdmin):
-    list_display = ["get_ref", "get_subject", "project", "status", "assigned_to", "get_type", "get_severity", "get_priority", "modified_date", "created_date", "get_activity", "owner"]
+    list_display = ["get_ref", "get_subject", "project", "status", "assigned_to", "get_type", "get_severity", "get_priority", "modified_date", "created_date", "get_activity", "owner", "ref", "subject"]
     list_display_links = ["ref", "subject",]
     list_filter = [ClosedIssuesListFilter,
                    ("type__name", custom_titled_filter("Type")),

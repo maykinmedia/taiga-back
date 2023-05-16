@@ -18,6 +18,7 @@ static
 .project
 .idea
 .env
+env/
 .envrc
 .direnv
 settings/config.py

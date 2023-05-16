@@ -11,7 +11,7 @@ django-sites==0.10
 django-sr==0.0.4
 djmail==1.0.1
 easy-thumbnails==2.7.0
-fn==0.4.3
+# fn==0.4.3
 gunicorn==19.9.0
 netaddr==0.7.19
 premailer==3.0.1
@@ -38,3 +38,4 @@ oauthlib[signedtoken]
 html5lib
 zipp<2
 messagebird
+slackclient

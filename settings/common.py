@@ -9,6 +9,9 @@ import os
 import os.path
 import sys
 from datetime import timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
@@ -660,6 +663,9 @@ IMPORTERS = {
         "app_secret": "",
     }
 }
+
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
+SLACK_CHANNEL = os.environ.get("SLACK_CHANNEL")
 
 # Configuration for sending notifications
 NOTIFICATIONS_CUSTOM_FILTER = False
