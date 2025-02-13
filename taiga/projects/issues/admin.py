@@ -24,13 +24,15 @@ class SuperuserListFilter(admin.SimpleListFilter):
     parameter_name = "maykiners"
     def lookups(self, request, model_admin):
         qs = User.objects.filter(email__icontains='maykinmedia.nl', is_active=True).order_by('full_name')
-        return [('None', 'None')] + [(u.id, u.full_name) for u in qs]
+        return [('None', 'None'), ('Me', 'Me')] + [(u.id, u.full_name) for u in qs]
     def queryset(self, request, queryset):
         if self.value():
-            if self.value() != 'None':
-                return queryset.filter(assigned_to__id=self.value())
-            else:
+            if self.value() == 'None':
                 return queryset.filter(assigned_to__isnull=True)
+            elif self.value() == 'Me':
+                return queryset.filter(assigned_to=request.user)
+            else:
+                return queryset.filter(assigned_to__id=self.value())
         
 
 class ClosedIssuesListFilter(admin.SimpleListFilter):
@@ -161,7 +163,7 @@ def custom_titled_filter(title):
     return Wrapper
     
 class IssueAdmin(admin.ModelAdmin):
-    list_display = ["get_ref", "get_subject", "project", "status", "assigned_to", "get_type", "get_severity", "get_priority", "modified_date", "created_date", "get_activity", "owner"]
+    list_display = ["get_ref", "get_subject", "project", "get_status", "assigned_to", "get_type", "get_severity", "get_priority", "modified_date", "created_date", "get_activity", "owner", "ref", "subject"] # Ref and Subject are required due to system check
     list_display_links = ["ref", "subject",]
     list_filter = [ClosedIssuesListFilter,
                    ("type__name", custom_titled_filter("Type")),
@@ -187,25 +189,40 @@ class IssueAdmin(admin.ModelAdmin):
     def get_ref(self, obj):
         return mark_safe("<a target='_blank' href='{}'>{}</a>".format(get_absolute_url('/project/{}/issue/{}'.format(obj.project.slug, obj.ref)),
                                                       obj.ref))
+    get_ref.short_description = "Ref"
+    get_ref.admin_order_field = "ref"
 
     def get_subject(self, obj):
         return mark_safe("<a target='_blank' href='{}'>{}</a>".format(get_absolute_url('/project/{}/issue/{}'.format(obj.project.slug, obj.ref)),
                                                       obj.subject))
+    get_subject.short_description = "Subject"
+    get_subject.admin_order_field = "subject"
+
+    def get_status(self, obj):
+        return str(obj.status)
+    get_status.short_description = "Status"
+    get_status.admin_order_field = "status__name"
 
     def get_label_style(self):
-        return "padding: 4px; color: white; font-weight: bold; border-radius: 4px; text-shadow: 2px 2px black;"
-    
+        return "padding: 4px; color: white; font-size: larger; font-weight: bold; border-radius: 4px; text-shadow: 1px 1px black;"
+
     def get_type(self, obj):
         return mark_safe("<a href='?type__name={}' style='{} background-color: {};'>{}</a>".format(obj.type,
                                                                                                    self.get_label_style(), obj.type.color, obj.type))
-    
+    get_type.short_description = "type"
+    get_type.admin_order_field = "type__name"
+
     def get_severity(self, obj):
         return mark_safe("<a href='?severity__name={}' style='{} background-color: {};'>{}</a>".format(obj.severity,
                                                                                                        self.get_label_style(), obj.severity.color, obj.severity))
+    get_severity.short_description = "severity"
+    get_severity.admin_order_field = "severity__name"
 
     def get_priority(self, obj):
         return mark_safe("<a href='?priority__name={}' style='{} background-color: {};'>{}</a>".format(obj.priority,
                                                                                                        self.get_label_style(), obj.priority.color, obj.priority))
+    get_priority.short_description = "priority"
+    get_priority.admin_order_field = "priority__name"
     
     def get_activity(self, obj):
         return mark_safe("{} comments".format(obj.total_comments))
