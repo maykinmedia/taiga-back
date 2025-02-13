@@ -21,10 +21,10 @@ from taiga.projects.models import Project, Membership
 from taiga.users.models import User
 
 class Command(BaseCommand):
-    help = "Assign superuser users to all projects"
+    help = "Assign @maykinmedia.nl users to all projects"
 
     def handle(self, *args, **options):
-        superusers = User.objects.filter(is_superuser=True, is_active=True)
+        superusers = User.objects.filter(email__endswith='@maykinmedia.nl', is_active=True)
         for user in superusers:
             projects = Project.objects.exclude(memberships__user=user).filter(blocked_code=None)
             for project in projects:
