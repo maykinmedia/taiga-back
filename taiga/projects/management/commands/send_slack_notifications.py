@@ -17,14 +17,14 @@ PRIORITY_CHOICES = ["low", "normal", "high"]
 
 
 class Command(BaseCommand):
-    help = "Sends Slack notifications if a specific priority/severity is set on an issue."
+    help = "Sends Slack notifications if a specific priority/severity is set on a new issue."
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--last-updated",
             type=int,
             default=5,
-            help="Send notifications for the issues updated in the last x minutes. Default: 5."
+            help="Send notifications for the issues created in the last x minutes. Default: 5."
         )
         parser.add_argument(
             "--severity",
