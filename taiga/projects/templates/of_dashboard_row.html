@@ -1,0 +1,4 @@
+<td class="{% if not issues.0 %}empty{% elif issues.0.is_closed %}closed{% else %}open{% endif %}">
+  {% for issue in issues %}<a style='color: black;' href="/project/{{ issue.project.slug }}/issue/{{ issue.ref }}">{{ issue.ref }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+</td>
+  

@@ -31,7 +31,7 @@ class Command(BaseCommand):
         )
 
     def send_message(self, message: str, channel: str):
-        self.client.chat_postMessage(settings.SLACK_CHANNEL,
+        self.client.chat_postMessage(channel=settings.SLACK_CHANNEL,
                                      link_names=1,
                                      text=message)
 

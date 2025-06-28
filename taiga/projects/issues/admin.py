@@ -8,6 +8,8 @@
 from django.contrib import admin
 from django.conf import settings
 from django.utils.safestring import mark_safe
+from django.template.response import TemplateResponse
+from django.urls import path
 
 from taiga.base.utils.urls import get_absolute_url
 from taiga.projects.attachments.admin import AttachmentInline
@@ -180,6 +182,31 @@ class IssueAdmin(admin.ModelAdmin):
     search_fields = ["subject", "description", "id", "ref", "project__name"]
     date_hierarchy = "created_date"
     ordering = ("-modified_date",)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [path("ofdash/", self.admin_site.admin_view(self.of_dash))]
+        return custom_urls + urls
+
+    def of_issues(self, project, match_string_list):
+        from operator import or_
+        from functools import reduce
+        q_expr = reduce(or_, (Q(subject__icontains=s) for s in match_string_list))
+        return [models.Issue.objects.filter(project=project).filter(q_expr).order_by('ref').first()]
+
+    def of_dash(self, request):
+        context = dict(customers=[])
+        of_projects = Project.objects.filter(blocked_code__isnull=True, tags__contains=["openformulieren"]).order_by("-created_date")
+        for project in of_projects:
+            
+            context["customers"] += [{"project": project,
+                                      "install": self.of_issues(project, ["Installatie", "Deployment"]),
+                                      "access": self.of_issues(project, ["toegang", "gebruikers", "keycloak"]),
+                                      "intro": self.of_issues(project, ["introductie", "training"]),
+                                      "domain": self.of_issues(project, ["domein"]),
+                                      "digid": self.of_issues(project, ["DigiD"])}]
+                                     
+        return TemplateResponse(request, "of_dashboard.html", context)
 
     def get_queryset(self, request):
         qs = super(IssueAdmin, self).get_queryset(request)
