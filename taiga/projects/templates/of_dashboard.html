@@ -1,0 +1,102 @@
+{% extends "admin/base_site.html" %}
+{% load i18n%}
+
+{% block extrastyle %}
+    <link rel="stylesheet" type="text/css" href="/admin/css/forms.css"/>
+    {{ block.super }}
+    <style>
+        .table {
+            width: 100%;
+        }
+        .closed {
+            background-color: green;
+        }
+        .danger {
+            background-color: #6b1a12;
+        }
+        .open {
+            background-color: #c4570e;
+        }
+        .empty {
+            background-color: white;
+        }
+        table tr td a.text-white, .text-white {
+            color: white ;
+        }
+    </style>
+{% endblock %}
+{% block extrahead %}
+    {{ block.super }}
+    <script src="../../../jsi18n/" type="text/javascript"></script>
+    <script src="/admin/js/core.js" type="text/javascript"></script>
+    <script type="text/javascript" src="/admin/js/vendor/jquery/jquery.min.js"></script>
+{% endblock %}
+
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="../..">Voorpagina</a> &rsaquo;
+    <a href="../..">{{ _('Dashboard') }}</a> &rsaquo;
+    {{ _('OF Dashboard') }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div>
+  {% comment %}
+    <form action="" id="search_form" method="get">
+        <div>
+            {% if errors %}
+                {{ errors.as_ul }}
+            {% endif %}
+            <fieldset class="module aligned">
+                <div class="form-row">
+                    <label for="search">Filter</label>
+                    <input type="text" name="search" value="{{ search_term }}" class="search" id="search">
+                </div>
+                <div class="form-row">
+                    <label for="filter">Filter by</label>
+                    <select name="filter" id="filter">
+                        <option value="" {% if not selected_filter %}selected{% endif %}>Default</option>
+                        <option value="all" {% if selected_filter == 'all' %}selected{% endif %}>All Rows</option>
+                        <option value="lead" {% if selected_filter == 'lead' %}selected{% endif %}>Has Leads</option>
+                        <option value="quote" {% if selected_filter == 'quote' %}selected{% endif %}>Has Quotes</option>
+                    </select>
+                </div>
+                </fieldset>
+                <div class="submit-row">
+                    <input type="submit" class="default" value="Toepassen" />
+                    </div>
+                </div>
+    </form>
+    {% endcomment %}
+</div>
+<div class="module">
+    <div class="results">
+        <table id="result_list" class="table">
+            <thead>
+                <tr>
+                  <th>Klant</th>
+		  <th>Installatie</th>
+		  <th>Toegang</th>
+                  <th>Intro</th>
+                  <th>Domeinen</th>
+                  <th>DigiD</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for customer in customers %}
+                    <tr>
+                        <td><a href="/project/{{ customer.project.slug }}/">{{ customer.project.name }} ({{ customer.project.created_date|date }})</td>
+                        {% include "of_dashboard_row.html" with issues=customer.install %}
+                        {% include "of_dashboard_row.html" with issues=customer.access %}
+                        {% include "of_dashboard_row.html" with issues=customer.intro %}
+                        {% include "of_dashboard_row.html" with issues=customer.domain %}
+                        {% include "of_dashboard_row.html" with issues=customer.digid %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
