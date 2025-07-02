@@ -194,6 +194,10 @@ class IssueAdmin(admin.ModelAdmin):
         q_expr = reduce(or_, (Q(subject__icontains=s) for s in match_string_list))
         return [models.Issue.objects.filter(project=project).filter(q_expr).order_by('ref').first()]
 
+    def of_wiki(self, project, wiki_slug):
+        from taiga.projects.wiki.models import WikiPage
+        return WikiPage.objects.filter(project=project, slug=wiki_slug).exists()
+    
     def of_dash(self, request):
         context = dict(customers=[])
         of_projects = Project.objects.filter(blocked_code__isnull=True, tags__contains=["openformulieren"]).order_by("-created_date")
@@ -204,7 +208,8 @@ class IssueAdmin(admin.ModelAdmin):
                                       "access": self.of_issues(project, ["toegang", "gebruikers", "keycloak"]),
                                       "intro": self.of_issues(project, ["introductie", "training"]),
                                       "domain": self.of_issues(project, ["domein"]),
-                                      "digid": self.of_issues(project, ["DigiD"])}]
+                                      "digid": self.of_issues(project, ["DigiD"]),
+                                      "slr": self.of_wiki(project, 'reports')}]
                                      
         return TemplateResponse(request, "of_dashboard.html", context)
 

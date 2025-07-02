@@ -82,6 +82,7 @@
                   <th>Intro</th>
                   <th>Domeinen</th>
                   <th>DigiD</th>
+		  <th>SLR</th>
                 </tr>
             </thead>
             <tbody>
@@ -93,6 +94,7 @@
                         {% include "of_dashboard_row.html" with issues=customer.intro %}
                         {% include "of_dashboard_row.html" with issues=customer.domain %}
                         {% include "of_dashboard_row.html" with issues=customer.digid %}
+			{% include "of_dashboard_row_wiki.html" with page=customer.slr %}
                     </tr>
                 {% endfor %}
             </tbody>
