@@ -17,19 +17,26 @@ Copyright (c) 2021-present Kaleidos Ventures SL
 
 {% block body %}
     {% trans full_name=sender_full_name, project=membership.project, product_name=sr("product_name") %}
-    <h2>You have been invited to {{ product_name }}!</h2>
-<p>Hi! {{ full_name }} has sent you an invitation to join project <em>{{ project }}</em> in {{ product_name }}.</br> Taiga is an Open Source Agile Project Management Tool. There is no cost for you to be a Taiga user.</p>
+    <h2>Je bent uitgenodigd voor {{ product_name }}!</h2>
+<p>Hallo, {{ full_name }} Je hebt toegang gekregen tot het project <em>{{ project }}</em> in {{ product_name }}, het issuesysteem van Maykin Media. </br> Via de uitnodiging in deze e-mail kun je een nieuw wachtwoord instellen en direct aan de slag </p>
+ <p>In Taiga kun je onder andere:</p>
+    <ul>
+        <li>Vragen stellen aan onze supportafdeling</li>
+        <li>Incidenten en meldingen registreren</li>
+        <li>Via de Wiki snelkoppelingen naar relevante omgevingen vinden</li>
+        <li>Extra informatie bekijken over de diensten die je bij ons afneemt</li>
+    </ul>
     {% endtrans %}
 
     {% if membership.invitation_extra_text %}
         {% trans extra=membership.invitation_extra_text|linebreaksbr %}
-    <p><small>And now a few words from the jolly good fellow or sistren<br/> who thought so kindly as to invite you</small></p>
+    <p><small>AEn dan nu een kort bericht van degene die jou heeft uitgenodigd:"</small></p>
     <p><strong>{{ extra }}</strong></p>
         {% endtrans %}
     {% endif %}
 
     <a class="button" href="{{ resolve_front_url("invitation", membership.token) }}"
-       title="{{ _("Accept your invitation to Taiga") }}">{{ _("Accept your invitation") }}</a>
+       title="{{ _("Klik op onderstaande link om je uitnodiging voor Taiga te accepteren.") }}">{{ _("Accepteer") }}</a>
     {% trans signature=sr("signature") %}
     <p><small>{{ signature }}</small></p>
     {% endtrans %}
