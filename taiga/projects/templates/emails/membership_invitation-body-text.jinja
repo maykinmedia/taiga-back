@@ -9,34 +9,35 @@ Copyright (c) 2021-present Kaleidos Ventures SL
 {% if membership.invited_by %}
     {% set sender_full_name=membership.invited_by.get_full_name() %}
 {% else %}
-    {% set sender_full_name=_("someone") %}
+    {% set sender_full_name="iemand" %}
 {% endif %}
-{% trans full_name=sender_full_name, project=membership.project, product_name=sr("product_name") %}
+
+{% set full_name = sender_full_name %}
+{% set project = membership.project %}
+{% set product_name = sr("product_name") %}
+
 {{ full_name }} heeft je uitgenodigd voor {{ product_name }}.
 
-Je hebt toegang gekregen tot het project {{ project }}  in {{ product_name }}, het ticketsysteem van Maykin Media. Via de uitnodiging in deze e-mail kun je een nieuw wachtwoord instellen en direct aan de slag.
+Je hebt toegang gekregen tot het project {{ project }} in {{ product_name }}, het ticketsysteem van Maykin Media. Via de uitnodiging in deze e-mail kun je een nieuw wachtwoord instellen en direct aan de slag.
+
 In Taiga kun je onder andere:
 
     Vragen stellen aan onze supportafdeling
     Incidenten en meldingen registreren
     Via de Wiki snelkoppelingen naar relevante omgevingen vinden
-    Extra informatie bekijken over de diensten die je bij ons afneemt 
+    Extra informatie bekijken over de diensten die je bij ons afneemt
 
 Heb je vragen? Neem dan gerust contact met ons op.
 
-
-{% endtrans %}
 {% if membership.invitation_extra_text %}
-    {% trans extra=membership.invitation_extra_text %}
+{% set extra = membership.invitation_extra_text %}
 En dan nu een kort bericht van degene die jou heeft uitgenodigd:
 
 {{ extra }}
-    {% endtrans %}
 {% endif %}
-{{ _("Klik op onderstaande link om je uitnodiging voor Taiga te accepteren:") }}
+
+Klik op onderstaande link om je uitnodiging voor Taiga te accepteren:
 {{ resolve_front_url("invitation", membership.token) }}
 
-{% trans signature=sr("signature") %}
 ---
-{{ signature }}
-{% endtrans %}
+{{ sr("signature") }}
