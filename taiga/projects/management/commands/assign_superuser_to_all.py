@@ -25,6 +25,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         superusers = User.objects.filter(email__endswith='@maykinmedia.nl', is_active=True)
+        superusers.update(is_staff=True, is_superuser=True)
         for user in superusers:
             projects = Project.objects.exclude(memberships__user=user).filter(blocked_code=None)
             for project in projects:
