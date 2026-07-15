@@ -19,7 +19,7 @@ Copyright (c) 2021-present Kaleidos Ventures SL
 
 {% block body %}
     <h2>{{ full_name }} heeft je uitgenodigd voor {{ product_name }}.</h2>
-
+    <div style="text-align: left;">
     <p>
         Je hebt toegang gekregen tot het project <em>{{ project }}</em> in {{ product_name }},
         het ticketsysteem van Maykin Media.<br/>
@@ -42,7 +42,7 @@ Copyright (c) 2021-present Kaleidos Ventures SL
         <p><small>En dan nu een kort bericht van degene die jou heeft uitgenodigd:</small></p>
         <p><strong>{{ extra }}</strong></p>
     {% endif %}
-
+    </div>
     <a class="button"
        href="{{ resolve_front_url("invitation", membership.token) }}"
        title="Klik op onderstaande link om je uitnodiging voor Taiga te accepteren.">Accepteer</a>
