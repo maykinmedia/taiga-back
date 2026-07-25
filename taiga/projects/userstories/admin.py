@@ -10,8 +10,22 @@ from django.contrib import admin
 from taiga.projects.attachments.admin import AttachmentInline
 from taiga.projects.notifications.admin import WatchedInline
 from taiga.projects.votes.admin import VoteInline
+from taiga.projects.admin_utils import (
+    SuperuserListFilter,
+    ClosedOpenListFilter,
+    TagsArrayFieldListFilter,
+    ProjectTagsArrayFieldListFilter,
+    custom_titled_filter,
+    get_front_ref_link,
+    get_front_subject_link,
+)
 
 from . import models
+
+
+class UserStoryClosedOpenListFilter(ClosedOpenListFilter):
+    # UserStory tracks its own is_closed flag rather than deriving it from status.
+    lookup_field = "is_closed"
 
 
 class RolePointsInline(admin.TabularInline):
@@ -30,11 +44,34 @@ class RolePointsAdmin(admin.ModelAdmin):
 
 
 class UserStoryAdmin(admin.ModelAdmin):
-    list_display = ["project", "milestone",  "ref", "subject",]
+    list_display = ["get_ref", "get_subject", "project", "get_status", "assigned_to", "milestone", "modified_date", "created_date", "owner", "ref", "subject"] # Ref and Subject are required due to system check
     list_display_links = ["ref", "subject",]
+    list_filter = [UserStoryClosedOpenListFilter,
+                   ProjectTagsArrayFieldListFilter,
+                   SuperuserListFilter,
+                   ("status__name", custom_titled_filter("Status")),
+                   "project",
+                   TagsArrayFieldListFilter]
     inlines = [RolePointsInline, WatchedInline, VoteInline]
     raw_id_fields = ["project"]
-    search_fields = ["subject", "description", "id", "ref"]
+    search_fields = ["subject", "description", "id", "ref", "project__name"]
+    date_hierarchy = "created_date"
+    ordering = ("-modified_date",)
+
+    def get_ref(self, obj):
+        return get_front_ref_link(obj, "userstory")
+    get_ref.short_description = "Ref"
+    get_ref.admin_order_field = "ref"
+
+    def get_subject(self, obj):
+        return get_front_subject_link(obj, "userstory")
+    get_subject.short_description = "Subject"
+    get_subject.admin_order_field = "subject"
+
+    def get_status(self, obj):
+        return str(obj.status)
+    get_status.short_description = "Status"
+    get_status.admin_order_field = "status__name"
 
     def get_object(self, *args, **kwargs):
         self.obj = super().get_object(*args, **kwargs)

@@ -6,50 +6,23 @@
 # Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.contrib import admin
-from django.conf import settings
 from django.utils.safestring import mark_safe
 
-from taiga.base.utils.urls import get_absolute_url
 from taiga.projects.attachments.admin import AttachmentInline
 from taiga.projects.notifications.admin import WatchedInline
 from taiga.projects.votes.admin import VoteInline
 from taiga.projects.history.utils import attach_total_comments_to_queryset
-from taiga.projects.models import Project
-from taiga.users.models import User
+from taiga.projects.admin_utils import (
+    SuperuserListFilter,
+    ClosedOpenListFilter,
+    TagsArrayFieldListFilter,
+    ProjectTagsArrayFieldListFilter,
+    custom_titled_filter,
+    get_front_ref_link,
+    get_front_subject_link,
+)
 
 from . import models
-
-class SuperuserListFilter(admin.SimpleListFilter):
-    title = "Assigned to Maykiner"
-    parameter_name = "maykiners"
-    def lookups(self, request, model_admin):
-        qs = User.objects.filter(email__icontains='maykinmedia.nl', is_active=True).order_by('full_name')
-        return [('None', 'None'), ('Me', 'Me')] + [(u.id, u.full_name) for u in qs]
-    def queryset(self, request, queryset):
-        if self.value():
-            if self.value() == 'None':
-                return queryset.filter(assigned_to__isnull=True)
-            elif self.value() == 'Me':
-                return queryset.filter(assigned_to=request.user)
-            else:
-                return queryset.filter(assigned_to__id=self.value())
-        
-
-class ClosedIssuesListFilter(admin.SimpleListFilter):
-    title = "Closed or Open"
-    parameter_name = "closed_open"
-    def lookups(self, request, model_admin):
-        return [
-            ('open', 'Open'),
-            ('closed', 'Closed')
-        ]
-    
-    def queryset(self, request, queryset):
-        if self.value():
-            if self.value() == 'open':
-                return queryset.filter(status__is_closed=False)
-            if self.value() == 'closed':
-                return queryset.filter(status__is_closed=True)
 
 # Borrowed priority/severity filters from Victorien's work in send_sms_notifications
 from functools import reduce
@@ -90,82 +63,10 @@ class SHTFIssuesListFilter(admin.SimpleListFilter):
                 return queryset.filter(severity_filters | priority_filters)
 
 
-class TagsArrayFieldListFilter(admin.SimpleListFilter):
-    """An admin list filter for ArrayFields."""
-    title = "Issue tags"
-    parameter_name = "tags"
-    
-    def lookups(self, request, model_admin):
-        """Return the filtered queryset."""
-        queryset_values = model_admin.model.objects.values_list(
-            self.parameter_name, flat=True
-        )
-        values = []
-        for sublist in queryset_values:
-            if sublist:
-                for value in sublist:
-                    if value:
-                        values.append((value, value))
-            else:
-                values.append(("null", "-"))
-        return sorted(set(values))
-
-    def queryset(self, request, queryset):
-        """Return the filtered queryset."""
-        lookup_value = self.value()
-        if lookup_value:
-            lookup_filter = (
-                {"{}__isnull".format(self.parameter_name): True}
-                if lookup_value == "null"
-                else {"{}__contains".format(self.parameter_name): [lookup_value]}
-            )
-            queryset = queryset.filter(**lookup_filter)
-        return queryset
-
-class ProjectTagsArrayFieldListFilter(admin.SimpleListFilter):
-    """An admin list filter for ArrayFields."""
-    title = "Project tags"
-    parameter_name = "project_tags"
-    
-    def lookups(self, request, model_admin):
-        """Return the filtered queryset."""
-        queryset_values = Project.objects.values_list(
-            "tags", flat=True
-        )
-        values = []
-        for sublist in queryset_values:
-            if sublist:
-                for value in sublist:
-                    if value:
-                        values.append((value, value))
-            else:
-                values.append(("null", "-"))
-        return sorted(set(values))
-
-    def queryset(self, request, queryset):
-        """Return the filtered queryset."""
-        lookup_value = self.value()
-        if lookup_value:
-            lookup_filter = (
-                {"project__tags__isnull": True}
-                if lookup_value == "null"
-                else {"project__tags__contains": [lookup_value]}
-            )
-            queryset = queryset.filter(**lookup_filter)
-        return queryset
-
-def custom_titled_filter(title):
-    class Wrapper(admin.FieldListFilter):
-        def __new__(cls, *args, **kwargs):
-            instance = admin.FieldListFilter.create(*args, **kwargs)
-            instance.title = title
-            return instance
-    return Wrapper
-    
 class IssueAdmin(admin.ModelAdmin):
     list_display = ["get_ref", "get_subject", "project", "get_status", "assigned_to", "get_type", "get_severity", "get_priority", "modified_date", "created_date", "get_activity", "owner", "ref", "subject"] # Ref and Subject are required due to system check
     list_display_links = ["ref", "subject",]
-    list_filter = [ClosedIssuesListFilter,
+    list_filter = [ClosedOpenListFilter,
                    ("type__name", custom_titled_filter("Type")),
                    SHTFIssuesListFilter,
                    ProjectTagsArrayFieldListFilter,
@@ -187,14 +88,12 @@ class IssueAdmin(admin.ModelAdmin):
         return qs
     
     def get_ref(self, obj):
-        return mark_safe("<a target='_blank' href='{}'>{}</a>".format(get_absolute_url('/project/{}/issue/{}'.format(obj.project.slug, obj.ref)),
-                                                      obj.ref))
+        return get_front_ref_link(obj, "issue")
     get_ref.short_description = "Ref"
     get_ref.admin_order_field = "ref"
 
     def get_subject(self, obj):
-        return mark_safe("<a target='_blank' href='{}'>{}</a>".format(get_absolute_url('/project/{}/issue/{}'.format(obj.project.slug, obj.ref)),
-                                                      obj.subject))
+        return get_front_subject_link(obj, "issue")
     get_subject.short_description = "Subject"
     get_subject.admin_order_field = "subject"
 
