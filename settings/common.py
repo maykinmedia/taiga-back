@@ -83,7 +83,7 @@ USE_I18N = True
 USE_L10N = True
 # Language code for this installation. All choices can be found here:
 # http://www.i18nguy.com/unicode/language-identifiers.html
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'nl'
 
 # Languages we provide translations for, out of the box.
 LANGUAGES = [
@@ -619,7 +619,7 @@ MAX_PUBLIC_PROJECTS_PER_USER = None  # None == no limit
 MAX_MEMBERSHIPS_PRIVATE_PROJECTS = None  # None == no limit
 MAX_MEMBERSHIPS_PUBLIC_PROJECTS = None  # None == no limit
 
-MAX_PENDING_MEMBERSHIPS = 30  # Max number of unconfirmed memberships in a project
+MAX_PENDING_MEMBERSHIPS = 40  # Max number of unconfirmed memberships in a project
 
 # DJANGO SETTINGS RESOLVER
 SR = {
