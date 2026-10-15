@@ -14,6 +14,7 @@ from taiga.projects.attachments.admin import AttachmentInline
 from taiga.projects.notifications.admin import WatchedInline
 from taiga.projects.votes.admin import VoteInline
 from taiga.projects.history.utils import attach_total_comments_to_queryset
+from taiga.projects.models import Project
 from taiga.projects.admin_utils import (
     SuperuserListFilter,
     ClosedOpenListFilter,
