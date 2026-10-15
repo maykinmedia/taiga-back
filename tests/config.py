@@ -13,6 +13,9 @@ ENABLE_TELEMETRY = False
 
 SECRET_KEY = "not very secret in tests"
 
+# Maykin sets LANGUAGE_CODE = "nl" in settings/common.py; the tests assert English messages
+LANGUAGE_CODE = "en-us"
+
 TEMPLATES[0]["OPTIONS"]['context_processors'] += "django.template.context_processors.debug"
 
 CELERY_ENABLED = False
