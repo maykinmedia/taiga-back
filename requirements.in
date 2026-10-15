@@ -43,5 +43,6 @@ html5lib
 # Importers
 asana>=3.0,<4.0 # asana v4 is complete rewrite
 
-# Maykin: SMS notifications (send_sms_notifications)
+# Maykin management commands: send_sms_notifications, send_slack_*
 messagebird
+slack_sdk

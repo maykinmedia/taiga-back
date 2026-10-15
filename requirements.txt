@@ -221,6 +221,8 @@ six==1.17.0
     #   rudder-sdk-python
     #   sampledata
     #   serpy
+slack-sdk==3.45.0
+    # via -r requirements.in
 sqlparse==0.5.3
     # via django
 tifffile==2025.5.10

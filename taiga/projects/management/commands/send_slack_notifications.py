@@ -3,7 +3,7 @@ import datetime
 from functools import reduce
 from typing import List, NoReturn, Optional, Union, Any
 
-from slack import WebClient
+from slack_sdk import WebClient
 from django.conf import settings
 from django.core.management.base import (BaseCommand, CommandError,
                                          CommandParser)
