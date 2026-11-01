@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>{{ project.name }}</title>
+        <style type="text/css">
+            body { margin: 0; padding: 16px; font-family: Arial, sans-serif; font-size: 14px; color: #4c566a; background-color: #ffffff; }
+            h1 { margin: 0 0 4px 0; font-size: 18px; }
+            p { margin: 0 0 12px 0; }
+            a { color: #008aa8; text-decoration: none; }
+            table { border-collapse: collapse; width: 100%; max-width: 760px; }
+            th { text-align: left; padding: 14px 6px 4px 8px; font-size: 13px; text-transform: uppercase; border-bottom: 1px solid #d8dee9; }
+            td { padding: 3px 6px; border-bottom: 1px solid #eceff4; vertical-align: top; }
+            .count { color: #8c94a6; font-weight: normal; }
+            .due { width: 80px; white-space: nowrap; font-size: 13px; }
+            .due-none { color: #b0b6c3; }
+            .due-today { color: #e47c40; font-weight: bold; }
+            .due-overdue { color: #e44057; font-weight: bold; }
+            .ref { color: #8c94a6; }
+            .blocked { color: #e44057; font-size: 11px; text-transform: uppercase; }
+            .summary { color: #8c94a6; }
+        </style>
+    </head>
+    <body>
+        <h1>{% trans project=project.name %}Your user stories in {{ project }}{% endtrans %}</h1>
+        <p class="summary">
+            {% trans count=nr_userstories %}{{ count }} open user story is assigned to you{% pluralize %}{{ count }} open user stories are assigned to you{% endtrans %}{% if nr_overdue %}, {% trans count=nr_overdue %}{{ count }} is overdue{% pluralize %}{{ count }} are overdue{% endtrans %}{% endif %}.
+            <a href="{{ resolve_front_url('kanban', project.slug) }}">{{ _("Open the Kanban board") }}</a>
+        </p>
+        <table>
+            {% for column in columns %}
+                <tr>
+                    <th colspan="2" style="border-left: 4px solid {{ column.status.color }};">
+                        {{ column.status.name }} <span class="count">{{ column.userstories|length }}</span>
+                    </th>
+                </tr>
+                {% for row in column.userstories %}
+                    <tr>
+                        {% if row.due_date is none %}
+                            <td class="due due-none">&ndash;</td>
+                        {% elif row.is_overdue %}
+                            <td class="due due-overdue">{{ row.due_date|date("SHORT_DATE_FORMAT") }}</td>
+                        {% elif row.is_due_today %}
+                            <td class="due due-today">{{ row.due_date|date("SHORT_DATE_FORMAT") }}</td>
+                        {% else %}
+                            <td class="due">{{ row.due_date|date("SHORT_DATE_FORMAT") }}</td>
+                        {% endif %}
+                        <td>
+                            <a href="{{ resolve_front_url('userstory', project.slug, row.userstory.ref) }}"><span class="ref">#{{ row.userstory.ref }}</span> {{ row.userstory.subject }}</a>
+                            {% if row.userstory.is_blocked %}
+                                <span class="blocked">{{ _("blocked") }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </table>
+    </body>
+</html>
