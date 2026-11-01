@@ -621,6 +621,13 @@ MAX_MEMBERSHIPS_PUBLIC_PROJECTS = None  # None == no limit
 
 MAX_PENDING_MEMBERSHIPS = 40  # Max number of unconfirmed memberships in a project
 
+# Prometheus /metrics endpoint
+# IP addresses or networks (CIDR notation) allowed to scrape /metrics. Empty means nobody is allowed.
+METRICS_ALLOWED_IPS = []
+# Number of reverse proxies in front of taiga-back. 0 uses REMOTE_ADDR, n > 0 uses the n-th
+# address from the right in X-Forwarded-For (the address as seen by the outermost proxy).
+METRICS_NUM_PROXIES = 0
+
 # DJANGO SETTINGS RESOLVER
 SR = {
     "taigaio_url": "https://taiga.io",

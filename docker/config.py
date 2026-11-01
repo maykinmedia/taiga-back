@@ -123,6 +123,13 @@ PUBLIC_REGISTER_ENABLED = os.getenv('PUBLIC_REGISTER_ENABLED', 'False') == 'True
 
 
 #########################################
+##  PROMETHEUS METRICS
+#########################################
+METRICS_ALLOWED_IPS = [ip.strip() for ip in os.getenv('METRICS_ALLOWED_IPS', '').split(',') if ip.strip()]
+METRICS_NUM_PROXIES = int(os.getenv('METRICS_NUM_PROXIES', '0'))
+
+
+#########################################
 ## CONTRIBS
 #########################################
 

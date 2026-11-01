@@ -115,6 +115,8 @@ pillow==8.2.0
     #   psd-tools
 premailer==3.0.1
     # via -r requirements.in
+prometheus-client==0.17.1
+    # via -r requirements.in
 psd-tools==1.8.38
     # via -r requirements.in
 psycopg2-binary==2.8.5

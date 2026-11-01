@@ -10,6 +10,7 @@ from django.conf.urls import include, url
 from django.contrib import admin
 from django.urls import path
 
+from .metrics.views import MetricsView
 from .routers import router
 
 
@@ -20,6 +21,7 @@ from .routers import router
 urlpatterns = [
     path('api/v1/', include(router.urls)),
     path('admin/', admin.site.urls),
+    path('metrics', MetricsView.as_view(), name='metrics'),
 ]
 
 handler500 = "taiga.base.api.views.api_server_error"
