@@ -9,6 +9,7 @@
 userstories admin, so the "global overview across projects" admin
 pages stay consistent without triplicating the same filter code."""
 
+from django.conf import settings
 from django.contrib import admin
 from django.utils.safestring import mark_safe
 
@@ -34,6 +35,31 @@ class SuperuserListFilter(admin.SimpleListFilter):
                 return queryset.filter(assigned_to=request.user)
             else:
                 return queryset.filter(assigned_to__id=self.value())
+
+
+class SupportListFilter(admin.SimpleListFilter):
+    """Filters on items assigned to the support members configured in
+    `settings.SUPPORT_USERNAMES`, either all of them or a single one."""
+    title = "Assigned to support"
+    parameter_name = "support"
+
+    def get_support_users(self):
+        return User.objects.filter(
+            username__in=settings.SUPPORT_USERNAMES, is_active=True
+        ).order_by("full_name")
+
+    def lookups(self, request, model_admin):
+        return [("all", "All support members")] + [
+            (str(u.id), u.full_name) for u in self.get_support_users()
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == "all":
+            return queryset.filter(assigned_to__in=self.get_support_users())
+        if self.value():
+            return queryset.filter(assigned_to__in=self.get_support_users(),
+                                   assigned_to__id=self.value())
+        return queryset
 
 
 class ClosedOpenListFilter(admin.SimpleListFilter):
