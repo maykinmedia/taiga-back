@@ -670,6 +670,14 @@ IMPORTERS = {
 # Configuration for sending notifications
 NOTIFICATIONS_CUSTOM_FILTER = False
 
+# Usernames of the support members, used by the "Assigned to support" admin
+# list filter. Comma separated, e.g. SUPPORT_USERNAMES="alice,bob,carol".
+SUPPORT_USERNAMES = [
+    username.strip()
+    for username in os.getenv("SUPPORT_USERNAMES", "").split(",")
+    if username.strip()
+]
+
 # MDRENDER
 MDRENDER_CACHE_ENABLE = True
 MDRENDER_CACHE_MIN_SIZE = 40

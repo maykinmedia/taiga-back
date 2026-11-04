@@ -17,6 +17,7 @@ from taiga.projects.history.utils import attach_total_comments_to_queryset
 from taiga.projects.models import Project
 from taiga.projects.admin_utils import (
     SuperuserListFilter,
+    SupportListFilter,
     ClosedOpenListFilter,
     TagsArrayFieldListFilter,
     ProjectTagsArrayFieldListFilter,
@@ -74,6 +75,7 @@ class IssueAdmin(admin.ModelAdmin):
                    SHTFIssuesListFilter,
                    ProjectTagsArrayFieldListFilter,
                    SuperuserListFilter,
+                   SupportListFilter,
                    ("severity__name", custom_titled_filter("Severity")),
                    ("priority__name", custom_titled_filter("Priority")),
                    ("status__name", custom_titled_filter("Status")),
