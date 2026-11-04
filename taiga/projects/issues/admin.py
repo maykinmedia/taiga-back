@@ -6,6 +6,8 @@
 # Copyright (c) 2021-present Kaleidos Ventures SL
 
 from django.contrib import admin
+from django.utils.html import format_html
+from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from django.template.response import TemplateResponse
 from django.urls import path
@@ -27,6 +29,7 @@ from taiga.projects.admin_utils import (
 from . import models
 
 # Borrowed priority/severity filters from Victorien's work in send_sms_notifications
+import re
 from functools import reduce
 from django.db.models import Q
 
@@ -45,7 +48,17 @@ def get_filters(severity, priority):
     )
     return (severity_filters, priority_filters)
 
-            
+
+HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}){1,2}$")
+DEFAULT_LABEL_COLOR = "#999999"
+
+
+def get_label_color(color):
+    """Only allow hex colours in the inline style, as the colour of a
+    type/severity/priority is set by project admins."""
+    return color if color and HEX_COLOR_RE.match(color) else DEFAULT_LABEL_COLOR
+
+
 class SHTFIssuesListFilter(admin.SimpleListFilter):
     title = "SHTF"
     parameter_name = "shtf"
@@ -83,6 +96,9 @@ class IssueAdmin(admin.ModelAdmin):
     search_fields = ["subject", "description", "id", "ref", "project__name"]
     date_hierarchy = "created_date"
     ordering = ("-modified_date",)
+
+    class Media:
+        css = {"all": ["issues/admin/labels.css"]}
 
     def get_urls(self):
         urls = super().get_urls()
@@ -134,27 +150,31 @@ class IssueAdmin(admin.ModelAdmin):
     get_status.short_description = "Status"
     get_status.admin_order_field = "status__name"
 
-    def get_label_style(self):
-        return "padding: 4px; color: white; font-size: larger; font-weight: bold; border-radius: 4px; text-shadow: 1px 1px black;"
+    def get_label(self, field_name, label):
+        if label is None:
+            return self.get_empty_value_display()
+        return format_html(
+            "<a href='?{}' class='issue-label' style='--label-color: {};'>{}</a>",
+            urlencode({"{}__name".format(field_name): label.name}),
+            get_label_color(label.color),
+            label.name,
+        )
 
     def get_type(self, obj):
-        return mark_safe("<a href='?type__name={}' style='{} background-color: {};'>{}</a>".format(obj.type,
-                                                                                                   self.get_label_style(), obj.type.color, obj.type))
+        return self.get_label("type", obj.type)
     get_type.short_description = "type"
     get_type.admin_order_field = "type__name"
 
     def get_severity(self, obj):
-        return mark_safe("<a href='?severity__name={}' style='{} background-color: {};'>{}</a>".format(obj.severity,
-                                                                                                       self.get_label_style(), obj.severity.color, obj.severity))
+        return self.get_label("severity", obj.severity)
     get_severity.short_description = "severity"
     get_severity.admin_order_field = "severity__name"
 
     def get_priority(self, obj):
-        return mark_safe("<a href='?priority__name={}' style='{} background-color: {};'>{}</a>".format(obj.priority,
-                                                                                                       self.get_label_style(), obj.priority.color, obj.priority))
+        return self.get_label("priority", obj.priority)
     get_priority.short_description = "priority"
     get_priority.admin_order_field = "priority__name"
-    
+
     def get_activity(self, obj):
         return mark_safe("{} comments".format(obj.total_comments))
                          
