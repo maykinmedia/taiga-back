@@ -1,0 +1,30 @@
+/*
+ * Type, severity and priority labels in the issue admin list view.
+ *
+ * Each label sets its Taiga colour as --label-color. The background is a
+ * tint of that colour mixed with the admin background, and the text uses
+ * the admin text colour, so the labels follow Django's light/dark theme.
+ */
+.issue-label {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid var(--label-color);
+    border-radius: 4px;
+    font-weight: bold;
+    white-space: nowrap;
+    background-color: transparent;
+    background-color: color-mix(in srgb, var(--label-color) 25%, var(--body-bg, #fff));
+}
+
+.issue-label:link,
+.issue-label:visited,
+.issue-label:hover,
+.issue-label:focus {
+    color: var(--body-fg, #333);
+    text-decoration: none;
+}
+
+.issue-label:hover,
+.issue-label:focus {
+    background-color: color-mix(in srgb, var(--label-color) 45%, var(--body-bg, #fff));
+}
