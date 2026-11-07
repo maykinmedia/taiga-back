@@ -5,6 +5,7 @@
 #
 # Copyright (c) 2021-present Kaleidos INC
 
+from django.conf import settings
 from django.utils.translation import gettext as _
 
 from taiga.base.api import serializers
@@ -172,9 +173,18 @@ class MembershipDictSerializer(serializers.LightDictSerializer):
     username = Field()
     photo = MethodField()
     gravatar_id = MethodField()
+    pinned_order = MethodField()
 
     def get_full_name_display(self, obj):
         return obj["full_name"] or obj["username"] or obj["email"]
+
+    def get_pinned_order(self, obj):
+        """Position of the member in `settings.PINNED_ASSIGNEE_USERNAMES`,
+        or None when the member is not pinned."""
+        try:
+            return settings.PINNED_ASSIGNEE_USERNAMES.index(obj["username"])
+        except ValueError:
+            return None
 
     def get_photo(self, obj):
         return get_photo_url(obj['photo'])

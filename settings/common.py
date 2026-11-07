@@ -678,6 +678,17 @@ SUPPORT_USERNAMES = [
     if username.strip()
 ]
 
+# Usernames of the (group) accounts that are shown first, in this order and
+# right after the current user, when picking an assignee in the front-end.
+# Exposed as `pinned_order` on the project members; the sorting itself is
+# done by the pinned-assignees front-end plugin (contrib/pinned-assignees).
+# Comma separated, e.g. PINNED_ASSIGNEE_USERNAMES="support,devops,sales".
+PINNED_ASSIGNEE_USERNAMES = [
+    username.strip()
+    for username in os.getenv("PINNED_ASSIGNEE_USERNAMES", "").split(",")
+    if username.strip()
+]
+
 # MDRENDER
 MDRENDER_CACHE_ENABLE = True
 MDRENDER_CACHE_MIN_SIZE = 40
