@@ -1,0 +1,7 @@
+{
+    "name": "Pinned assignees",
+    "slug": "pinned-assignees",
+    "isPack": false,
+    "module": "maykinPinnedAssignees",
+    "js": "plugins/pinned-assignees/pinned-assignees.js"
+}
