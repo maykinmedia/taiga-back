@@ -8,10 +8,12 @@
 from django.contrib import admin
 from django.urls import reverse
 from django.db import transaction
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
+from django.utils.http import urlencode
 from django.utils.translation import gettext_lazy as _
 
 from taiga.permissions.choices import ANON_PERMISSIONS
+from taiga.projects.admin_utils import TagsArrayFieldListFilter
 from taiga.projects.notifications.admin import NotifyPolicyInline
 from taiga.projects.likes.admin import LikeInline
 from taiga.users.admin import RoleInline
@@ -65,10 +67,11 @@ class MembershipInline(admin.TabularInline):
 
 
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "slug", "is_private","owner_url",
+    list_display = ["id", "name", "slug", "is_private", "owner_url", "get_tags",
                     "blocked_code", "archived_code", "is_featured", "created_date"]
     list_display_links = ["id", "name", "slug"]
-    list_filter = ("is_private", "blocked_code", "archived_code", "is_featured", "created_date")
+    list_filter = ("is_private", "blocked_code", "archived_code", "is_featured", "created_date",
+                   TagsArrayFieldListFilter)
     list_editable = ["is_featured", "blocked_code", "archived_code"]
     search_fields = ["id", "name", "slug", "owner__username", "owner__email", "owner__full_name"]
     inlines = [RoleInline,
@@ -134,6 +137,19 @@ class ProjectAdmin(admin.ModelAdmin):
                           args=(obj.owner.pk,))
             return format_html("<a href='{url}' title='{user}'>{user}</a>", url=url, user=obj.owner)
         return ""
+
+    @admin.display(
+        description=_("tags")
+    )
+    def get_tags(self, obj):
+        """The project tags, each linking to the changelist filtered on it."""
+        if not obj.tags:
+            return self.get_empty_value_display()
+        return format_html_join(
+            ", ",
+            "<a href='?{}'>{}</a>",
+            ((urlencode({TagsArrayFieldListFilter.parameter_name: tag}), tag) for tag in obj.tags),
+        )
 
     def get_object(self, *args, **kwargs):
         self.obj = super().get_object(*args, **kwargs)

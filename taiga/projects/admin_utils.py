@@ -5,12 +5,13 @@
 #
 # Copyright (c) 2021-present Kaleidos Ventures SL
 
-"""Admin list filters and helpers shared by the issues, tasks and
+"""Admin list filters and helpers shared by the projects, issues, tasks and
 userstories admin, so the "global overview across projects" admin
 pages stay consistent without triplicating the same filter code."""
 
 from django.conf import settings
 from django.contrib import admin
+from django.db.models import Q
 from django.utils.safestring import mark_safe
 
 from taiga.base.utils.urls import get_absolute_url
@@ -108,12 +109,16 @@ class TagsArrayFieldListFilter(admin.SimpleListFilter):
         """Return the filtered queryset."""
         lookup_value = self.value()
         if lookup_value:
-            lookup_filter = (
-                {"{}__isnull".format(self.parameter_name): True}
-                if lookup_value == "null"
-                else {"{}__contains".format(self.parameter_name): [lookup_value]}
-            )
-            queryset = queryset.filter(**lookup_filter)
+            if lookup_value == "null":
+                # Tags default to an empty list, but can also be NULL
+                queryset = queryset.filter(
+                    Q(**{"{}__isnull".format(self.parameter_name): True})
+                    | Q(**{self.parameter_name: []})
+                )
+            else:
+                queryset = queryset.filter(
+                    **{"{}__contains".format(self.parameter_name): [lookup_value]}
+                )
         return queryset
 
 
@@ -141,12 +146,13 @@ class ProjectTagsArrayFieldListFilter(admin.SimpleListFilter):
         """Return the filtered queryset."""
         lookup_value = self.value()
         if lookup_value:
-            lookup_filter = (
-                {"project__tags__isnull": True}
-                if lookup_value == "null"
-                else {"project__tags__contains": [lookup_value]}
-            )
-            queryset = queryset.filter(**lookup_filter)
+            if lookup_value == "null":
+                # Tags default to an empty list, but can also be NULL
+                queryset = queryset.filter(
+                    Q(project__tags__isnull=True) | Q(project__tags=[])
+                )
+            else:
+                queryset = queryset.filter(project__tags__contains=[lookup_value])
         return queryset
 
 
